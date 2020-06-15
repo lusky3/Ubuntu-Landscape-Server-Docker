@@ -49,21 +49,35 @@ else
         DNS_METHOD="--dns dns_freedns"
     # Fallback to Apache
     else
+        echo "20-domain.sh: DNS verification ENV values not found. Fallback to webroot (apache) method."
         DNS_METHOD="--apache"
     fi
     # Check if ECDSA is wanted (Default = true)
     if [[ "${ECDSA}" -eq "true" ]]; then
+        echo "20-domain.sh: ECDSA certificate is wanted."
         ECDSA=" --ecc ec-256"
     else
+        echo "20-domain.sh: RSA certificate is wanted."
         ECDSA=""
     fi
     # Request the sertificate from Let'sEncrypt
+    echo "20-domain.sh: Attempting to request certificate..."
     acme.sh --issue $DNS_METHOD -d $DOMAIN$ECDSA
     # Install the certificate
-    acme.sh --install-cert -d $DOMAIN${ECDSA:0:7} \
-    --cert-file      /etc/ssl/certs/landscape_server.pem  \
-    --key-file       /etc/ssl/private/landscape_server.key  \
-    --fullchain-file /etc/ssl/certs/landscape_server_ca.crt \
-    --reloadcmd     "service apache2 force-reload"
+    if [[ -d "/root/.acme/${DOMAIN}" ]] || [[ -d "/root/.acme/${DOMAIN_ecc}" ]]; then
+        echo "20-domain.sh: Certificate for $DOMAIN was found. Attempting to install to Apache..."
+        acme.sh --install-cert -d $DOMAIN${ECDSA:0:7} \
+            --cert-file      /etc/ssl/certs/landscape_server.pem  \
+            --key-file       /etc/ssl/private/landscape_server.key  \
+            --fullchain-file /etc/ssl/certs/landscape_server_ca.crt \
+            --reloadcmd     "service apache2 force-reload"
+    else   
+        echo "20-domain.sh: Certificate for $DOMAIN was Not Found."
+        echo "20-domain.sh: Certificate request may have failed. Run acme.sh manually."
+        echo "20-domain.sh: This won't cause a script failure, but certificate for landscape will likely be self-signed."
+        echo "20-domain.sh: End script."
+        exit 0
+    fi
 fi
+echo "20-domain.sh: Certificate requested and installed to Apache. Ending script."
 exit 0

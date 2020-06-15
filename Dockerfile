@@ -13,7 +13,7 @@ RUN apt-get update && \
     apt-get -y autoremove && \
     mkdir -p /etc/my_init.d
 
-COPY scripts/domain.sh /etc/my_init.d/domain.sh
+COPY scripts/20-domain.sh /etc/my_init.d/20-domain.sh
 
 ENV LANG=en_US.utf8 \
 CF_Email="" \

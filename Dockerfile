@@ -37,7 +37,7 @@ SMTP_RELAY_PORT="2525"
 
 # Final processes
 RUN rm /etc/init.d/syslog-ng && \
-    find /etc/init.d ! -type d -name '*' ! -name 'cron' ! -name 'dbus' -exec mv {} /etc/my_init.d/ \; && \
+    find /etc/init.d ! -type d -name '*' ! -name 'cron' ! -name 'dbus' ! -name 'hwclock.sh' -exec mv {} /etc/my_init.d/ \; && \
     chmod +x /etc/my_init.d/* && \
     unset DEBIAN_FRONTEND && \
 # Clean up APT when done.

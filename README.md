@@ -4,7 +4,7 @@ A work-in-progress Ubuntu Landscape Server for use with Docker.
   
 Designed to be an "all-in-one" solution. For majority of sys-admins this is probably not ideal and should instead consider the [juju Deployment method](https://docs.ubuntu.com/landscape/en/landscape-install-juju).
 
-Uses [acme.me](https://acme.me) to retrieve [Let'sEncrypt](https://letsencrypt.org) certificate.
+Uses [acme.me](https://acme.sh) to retrieve [Let'sEncrypt](https://letsencrypt.org) certificate.
 
 ## Env Variables
 

@@ -14,7 +14,7 @@ if [[ -f /root/.acme/achme.sh ]]; then
 else
     echo "20-domain.sh: acme.sh was not found. Running install."
     # Clone acme.sh repo from github
-    git clone https://github.com/acmesh-official/acme.sh.git /tmp/achme.sh && \
+    git clone https://github.com/acmesh-official/acme.sh.git /tmp/acme.sh && \
         cd /tmp/acme.sh && \
         # run the acme.sh installer
         ./acme.sh --install && \
@@ -23,6 +23,13 @@ else
         # Certificates will be placed in /etc/ssl/certs
         mkdir -p /etc/ssl/certs && \
         mkdir -p /etc/ssl/private
+fi
+
+if [ ! "$(command -v acme.sh)" ]; then
+    echo "20-domain.sh: acme.sh did not install properly. We will be unable to request a certificate."
+    echo "20-domain.sh: This won't cause a script failure, but certificate for landscape will likely be self-signed."
+    echo "20-domain.sh: End script."
+    exit 0
 fi
 
 # We don't want to waste our time if the certificates already exist

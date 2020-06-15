@@ -36,8 +36,9 @@ SMTP_RELAY_PASSWORD="Password" \
 SMTP_RELAY_PORT="2525"
 
 # Final processes
-RUN chmod +x /etc/my_init.d/20-domain.sh && \
-    chmod +x /etc/my_init.d/30-postfix.sh && \
+RUN rm /etc/init.d/syslog-ng && \
+    mv /etc/init.d/* /etc/my_init.d/ && \
+    chmod +x /etc/my_init.d/* && \
     unset DEBIAN_FRONTEND && \
 # Clean up APT when done.
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

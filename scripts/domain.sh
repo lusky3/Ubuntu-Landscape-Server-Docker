@@ -2,7 +2,7 @@
 #
 # Description: Setup achme.sh and obtain Let'sEncrypt certificate
 #
-if [[ -z ${DOMAIN} ]]
+if [[ -z ${DOMAIN} ]]; then
     echo "Domain ENV is empty. Kill script."
     exit 1
 fi

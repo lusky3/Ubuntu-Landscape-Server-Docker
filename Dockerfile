@@ -10,6 +10,7 @@ RUN apt-get update && \
     localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 && \
     add-apt-repository -y --update ppa:landscape/19.10 && \
     apt-get install -y landscape-server-quickstart && \
+    apt-get install -y syslog-ng && \
     apt-get -y autoremove && \
     mkdir -p /etc/my_init.d
 
@@ -28,7 +29,7 @@ ECDSA=true \
 DOMAIN=""
 
 # Final processes
-RUN chmod +x /etc/my_init.d/domain.sh && \
+RUN chmod +x /etc/my_init.d/20-domain.sh && \
 # Clean up APT when done.
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

@@ -35,7 +35,7 @@ fi
 # Check if ECDSA is wanted (Default = true)
 if [[ "${ECDSA}" -eq "true" ]]; then
     echo "20-domain.sh: ECDSA certificate is wanted."
-    export ECDSA=" -keylength ec-256 --ecc"
+    export ECDSA=" --keylength ec-256 --ecc"
 else
     echo "20-domain.sh: RSA certificate is wanted."
     export ECDSA=""
@@ -46,7 +46,7 @@ if [[ -d /.acme.sh/$DOMAIN ]] || [[ -d /.acme.sh/${DOMAIN}_ecc ]]; then
     echo "20-domain.sh: Certificate for $DOMAIN appears to already exist, so we will only try to install it."
     mkdir -p /etc/ssl/certs && \
         mkdir -p /etc/ssl/private
-    acme.sh --install-cert -d $DOMAIN${ECDSA:18:24} \
+    acme.sh --install-cert -d $DOMAIN${ECDSA:19:25} \
         --cert-file      /etc/ssl/certs/landscape_server.pem  \
         --key-file       /etc/ssl/private/landscape_server.key  \
         --fullchain-file /etc/ssl/certs/landscape_server_ca.crt \
@@ -71,11 +71,11 @@ else
 
     # Request the sertificate from Let'sEncrypt
     echo "20-domain.sh: Attempting to request certificate..."
-    acme.sh --issue $DNS_METHOD -d $DOMAIN${ECDSA:0:18}
+    acme.sh --issue $DNS_METHOD -d $DOMAIN${ECDSA:0:19}
     # Install the certificate
     if [[ -d /.acme.sh/$DOMAIN ]] || [[ -d /.acme.sh/${DOMAIN}_ecc ]]; then
         echo "20-domain.sh: Certificate for $DOMAIN was found. Attempting to install to Apache..."
-        acme.sh --install-cert -d $DOMAIN${ECDSA:18:24} \
+        acme.sh --install-cert -d $DOMAIN${ECDSA:19:25} \
             --cert-file      /etc/ssl/certs/landscape_server.pem  \
             --key-file       /etc/ssl/private/landscape_server.key  \
             --fullchain-file /etc/ssl/certs/landscape_server_ca.crt \

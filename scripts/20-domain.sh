@@ -3,14 +3,16 @@
 # Description: Setup achme.sh and obtain Let'sEncrypt certificate
 #
 if [[ -z ${DOMAIN} ]]; then
-    echo "domain.sh: Domain ENV is empty. Kill script."
+    echo "20-domain.sh: Domain ENV is empty. Kill script."
     exit 1
 fi
 
 # Check that acme doesn't already exist or update it if it does
-if [[ /root/.acme ]]; then
+if [[ -f /root/.acme/achme.sh ]]; then
+    echo "20-domain.sh: acme.sh was already found. Running update."
     acme.sh --upgrade
 else
+    echo "20-domain.sh: acme.sh was not found. Running install."
     # Clone acme.sh repo from github
     git clone https://github.com/acmesh-official/acme.sh.git /tmp/achme.sh && \
         cd /tmp/acme.sh && \
@@ -24,8 +26,8 @@ else
 fi
 
 # We don't want to waste our time if the certificates already exist
-if [[ -d /root/.acme/$DOMAIN ]] || [[ -d /root/.acme/$DOMAIN_ecc ]]; then
-    echo "domain.sh: Certificate for $DOMAIN appears to already exist, so we will only try to install it."
+if [[ -d "/root/.acme/${DOMAIN}" ]] || [[ -d "/root/.acme/${DOMAIN_ecc}" ]]; then
+    echo "20-domain.sh: Certificate for $DOMAIN appears to already exist, so we will only try to install it."
     mkdir -p /etc/ssl/certs && \
         mkdir -p /etc/ssl/private
     acme.sh --install-cert -d $DOMAIN${ECDSA:0:7} \
@@ -35,6 +37,7 @@ if [[ -d /root/.acme/$DOMAIN ]] || [[ -d /root/.acme/$DOMAIN_ecc ]]; then
         --reloadcmd     "service apache2 force-reload"
     exit 0
 else
+    echo "20-domain.sh: Certificate for $DOMAIN does not appear to exist, so we will try to request it."
     # Cloudflare
     if [[ -n "${CF_Token}" && -n "${CF_Account_ID}" ]] || [[ -n "${CF_Key}" && -n "${CF_Email}" ]]; then
         DNS_METHOD="--dns dns_cf"

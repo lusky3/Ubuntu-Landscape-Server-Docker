@@ -6,7 +6,7 @@ CMD ["/sbin/my_init"]
 
 RUN apt-get update && \
     apt-get upgrade -y -o Dpkg::Options::="--force-confold" && \
-    apt-get install -y locales software-properties-common git syslog-ng && \
+    apt-get install -y locales software-properties-common git && \
     localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 && \
     add-apt-repository -y --update ppa:landscape/19.10 && \
     apt-get install -y landscape-server-quickstart && \

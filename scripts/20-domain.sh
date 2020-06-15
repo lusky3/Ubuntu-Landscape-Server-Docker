@@ -32,8 +32,17 @@ if [ ! "$(command -v acme.sh)" ]; then
     exit 0
 fi
 
+# Check if ECDSA is wanted (Default = true)
+if [[ "${ECDSA}" -eq "true" ]]; then
+    echo "20-domain.sh: ECDSA certificate is wanted."
+    ECDSA=" --ecc ec-256"
+else
+    echo "20-domain.sh: RSA certificate is wanted."
+    ECDSA=""
+fi
+
 # We don't want to waste our time if the certificates already exist
-if [[ -d "/root/.acme/${DOMAIN}" ]] || [[ -d "/root/.acme/${DOMAIN_ecc}" ]]; then
+if [[ -d "/root/.acme/${DOMAIN}" ]] || [[ -d "/root/.acme/${DOMAIN}_ecc" ]]; then
     echo "20-domain.sh: Certificate for $DOMAIN appears to already exist, so we will only try to install it."
     mkdir -p /etc/ssl/certs && \
         mkdir -p /etc/ssl/private
@@ -59,14 +68,7 @@ else
         echo "20-domain.sh: DNS verification ENV values not found. Fallback to webroot (apache) method."
         DNS_METHOD="--apache"
     fi
-    # Check if ECDSA is wanted (Default = true)
-    if [[ "${ECDSA}" -eq "true" ]]; then
-        echo "20-domain.sh: ECDSA certificate is wanted."
-        ECDSA=" --ecc ec-256"
-    else
-        echo "20-domain.sh: RSA certificate is wanted."
-        ECDSA=""
-    fi
+
     # Request the sertificate from Let'sEncrypt
     echo "20-domain.sh: Attempting to request certificate..."
     acme.sh --issue $DNS_METHOD -d $DOMAIN$ECDSA

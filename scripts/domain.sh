@@ -36,13 +36,13 @@ if [[ -d /root/.acme/$DOMAIN ]] || [[ -d /root/.acme/$DOMAIN_ecc ]]; then
     exit 0
 else
     # Cloudflare
-    if [[ -n "${CF_Token}" && -n "${CF_Account_ID}" ]] || [[ -n "${CF_Key}" && -n "${CF_Email}" ]; then
+    if [[ -n "${CF_Token}" && -n "${CF_Account_ID}" ]] || [[ -n "${CF_Key}" && -n "${CF_Email}" ]]; then
         DNS_METHOD="--dns dns_cf"
     # AWS Route53
-    elif [ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]; then
+    elif [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
         DNS_METHOD="--dns dns_aws"
     # FreeDNS
-    elif [ -n "${FREEDNS_User}" && -n "${FREEDNS_Password}" ]; then
+    elif [[ -n "${FREEDNS_User}" && -n "${FREEDNS_Password}" ]]; then
         DNS_METHOD="--dns dns_freedns"
     # Fallback to Apache
     else

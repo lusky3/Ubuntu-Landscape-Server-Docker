@@ -8,7 +8,7 @@ if [[ -z ${DOMAIN} ]]; then
 fi
 
 # Check that acme doesn't already exist or update it if it does
-if [[ -f /root/.acme/achme.sh ]]; then
+if [[ -f /.acme/acme.sh ]]; then
     echo "20-domain.sh: acme.sh was already found. Running update."
     acme.sh --upgrade
 else
@@ -35,18 +35,18 @@ fi
 # Check if ECDSA is wanted (Default = true)
 if [[ "${ECDSA}" -eq "true" ]]; then
     echo "20-domain.sh: ECDSA certificate is wanted."
-    ECDSA=" --ecc ec-256"
+    export ECDSA=" --ecc ec-256"
 else
     echo "20-domain.sh: RSA certificate is wanted."
-    ECDSA=""
+    export ECDSA=""
 fi
 
 # We don't want to waste our time if the certificates already exist
-if [[ -d "/root/.acme/${DOMAIN}" ]] || [[ -d "/root/.acme/${DOMAIN}_ecc" ]]; then
+if [[ -d /.acme.sh/$DOMAIN ]] || [[ -d /.acme.sh/${DOMAIN}_ecc ]]; then
     echo "20-domain.sh: Certificate for $DOMAIN appears to already exist, so we will only try to install it."
     mkdir -p /etc/ssl/certs && \
         mkdir -p /etc/ssl/private
-    acme.sh --install-cert -d $DOMAIN${ECDSA:0:7} \
+    acme.sh --install-cert -d $DOMAIN${ECDSA:0:6} \
         --cert-file      /etc/ssl/certs/landscape_server.pem  \
         --key-file       /etc/ssl/private/landscape_server.key  \
         --fullchain-file /etc/ssl/certs/landscape_server_ca.crt \
@@ -73,7 +73,7 @@ else
     echo "20-domain.sh: Attempting to request certificate..."
     acme.sh --issue $DNS_METHOD -d $DOMAIN$ECDSA
     # Install the certificate
-    if [[ -d "/root/.acme/${DOMAIN}" ]] || [[ -d "/root/.acme/${DOMAIN_ecc}" ]]; then
+    if [[ -d /.acme.sh/$DOMAIN ]] || [[ -d /.acme.sh/${DOMAIN}_ecc ]]; then
         echo "20-domain.sh: Certificate for $DOMAIN was found. Attempting to install to Apache..."
         acme.sh --install-cert -d $DOMAIN${ECDSA:0:7} \
             --cert-file      /etc/ssl/certs/landscape_server.pem  \

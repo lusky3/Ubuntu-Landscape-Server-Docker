@@ -46,4 +46,4 @@ RUN chmod +x /etc/my_init.d/20-domain.sh && \
 EXPOSE 80 443
 
 # We want to refrain from requesting certificates unnecessarily
-VOLUME [ "/root/.acme" ]
+VOLUME [ "/.acme.sh" ]

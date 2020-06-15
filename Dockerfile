@@ -6,7 +6,7 @@ CMD ["/sbin/my_init"]
 
 RUN apt-get update && \
     apt-get upgrade -y -o Dpkg::Options::="--force-confold" && \
-    apt-get install -y locales software-properties-common git && \
+    apt-get install -y locales software-properties-common git syslog-ng && \
     localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 && \
     add-apt-repository -y --update ppa:landscape/19.10 && \
     apt-get install -y landscape-server-quickstart && \
@@ -31,3 +31,9 @@ DOMAIN=""
 RUN chmod +x /etc/my_init.d/domain.sh && \
 # Clean up APT when done.
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Expose the web server (apache) for Landscape
+EXPOSE 80 443
+
+# We want to refrain from requesting certificates unnecessarily
+VOLUME [ "/root/.acme" ]

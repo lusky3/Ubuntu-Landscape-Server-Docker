@@ -10,14 +10,15 @@ Uses [acme.me](https://acme.sh) to retrieve [Let'sEncrypt](https://letsencrypt.o
 
 ### Acme.sh
 
-To use DNS-based verification, use one of the following pairs of variables. Webroot verification will be used as a fall-back if no variables are used.  
+To use DNS-based verification, use only *one* ("1") of the following pairs of variables. Webroot verification will be used as a fall-back if no variables are used.  
   
-For Cloudflare:  
-CF_Email=""  
-CF_Key=""  
-or  
-CF_Account_ID=""  
-CF_Token=""  
+For Cloudflare, Global API method (less secure, full account access):  
+CF_Email  
+CF_Key  
+  
+For Cloudflare, Token method (more secure, controllable scope):  
+CF_Account_ID  
+CF_Token  
   
 For AWS (Route53):  
 AWS_ACCESS_KEY_ID  
@@ -31,4 +32,11 @@ Certificates can be either RSA or ECDSA, based on the following variable. Use "f
 ECDSA=true  
   
 Enter the FQDN (Domain) that will be used (eg. landscape.mydomain.com).  Required.  
-DOMAIN=""  
+DOMAIN  
+
+### Postfix
+
+These environmental variables will be used to configure the MTA (Postfix).  
+  
+Where should system alerts be sent to? (eg. admin@mydomain.com)  
+ADMIN_EMAIL

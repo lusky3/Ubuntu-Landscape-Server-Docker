@@ -2,4 +2,6 @@
 #
 # Description: Configure Postfix as the MTA
 #
-# Just a placeholder for now.
+if [[ -n $(postconf | grep "mydomain = ec2.internal") ]]; then
+    postconf -e "mydomain=$DOMAIN"
+fi

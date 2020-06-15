@@ -27,8 +27,13 @@ AWS_SECRET_ACCESS_KEY="" \
 FREEDNS_User="" \
 FREEDNS_Password="" \
 ECDSA=true \
-DOMAIN="" \
-ADMIN_EMAIL=""
+DOMAIN="landscape.host.local" \
+ADMIN_EMAIL="" \
+USE_SMTP_RELAY=false \
+SMTP_RELAY_HOST="" \
+SMTP_RELAY_USERNAME="Username" \
+SMTP_RELAY_PASSWORD="Password" \
+SMTP_RELAY_PORT="2525"
 
 # Final processes
 RUN chmod +x /etc/my_init.d/20-domain.sh && \

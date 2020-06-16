@@ -40,7 +40,6 @@ RUN rm /etc/init.d/syslog-ng && \
     mv /etc/init.d/apache2 /etc/my_init.d/ && \
     mv /etc/init.d/apache-htcacheclean /etc/my_init.d/ && \
     mv /etc/init.d/rabbitmq-server /etc/my_init.d/ && \
-    mv /etc/init.d/postfix /etc/my_init.d/ && \
     chmod +x /etc/my_init.d/* && \
     unset DEBIAN_FRONTEND && \
 # Clean up APT when done.

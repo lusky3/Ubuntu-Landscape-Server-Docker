@@ -21,10 +21,10 @@ if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
     
     # Export all ACME_* env vars for the DNS provider
     for var in $(env | grep '^ACME_' | cut -d= -f1); do
-      [ "$var" != "ACME_DNS_PROVIDER" ] && export "$var"
+      [ "$var" != "ACME_DNS_PROVIDER" ] && export "${var?}"
     done
     
-    if ~/.acme.sh/acme.sh --issue --dns dns_${PROVIDER} -d "$FQDN" --server letsencrypt 2>&1; then
+    if ~/.acme.sh/acme.sh --issue --dns "dns_${PROVIDER}" -d "$FQDN" --server letsencrypt 2>&1; then
       ~/.acme.sh/acme.sh --install-cert -d "$FQDN" --cert-file "$CERT_PATH" --key-file "$KEY_PATH" --fullchain-file /etc/ssl/certs/landscape-fullchain.crt
       echo "Let's Encrypt certificate installed"
     else

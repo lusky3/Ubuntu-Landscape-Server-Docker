@@ -1,5 +1,5 @@
-# Use phusion/baseimage as base image.
-FROM phusion/baseimage:bionic-1.0.0
+# Use phusion/baseimage as base image (Ubuntu 24.04 LTS)
+FROM phusion/baseimage:noble-1.0.2
 
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
@@ -7,9 +7,9 @@ CMD ["/sbin/my_init"]
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
     apt-get upgrade -y -o Dpkg::Options::="--force-confold" && \
-    apt-get install -y locales software-properties-common git postfix && \
+    apt-get install -y locales software-properties-common git postfix curl && \
     localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 && \
-    add-apt-repository -y --update ppa:landscape/19.10 && \
+    add-apt-repository -y --update ppa:landscape/self-hosted-24.04 && \
     apt-get install -y landscape-server-quickstart && \
     apt-get install -y syslog-ng && \
     apt-get -y autoremove && \

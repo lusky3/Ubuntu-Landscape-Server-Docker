@@ -1,0 +1,54 @@
+services:
+  landscape:
+    build: .
+    container_name: landscape-server
+    hostname: ${DOMAIN:-landscape.local}
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Domain and SSL
+      - DOMAIN=${DOMAIN:-landscape.local}
+      - ECDSA=${ECDSA:-true}
+      
+      # Cloudflare DNS (Global API - less secure)
+      - CF_Email=${CF_Email:-}
+      - CF_Key=${CF_Key:-}
+      
+      # Cloudflare DNS (Token - more secure)
+      - CF_Account_ID=${CF_Account_ID:-}
+      - CF_Token=${CF_Token:-}
+      
+      # AWS Route53
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      
+      # FreeDNS
+      - FREEDNS_User=${FREEDNS_User:-}
+      - FREEDNS_Password=${FREEDNS_Password:-}
+      
+      # Email configuration
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@localhost}
+      - USE_SMTP_RELAY=${USE_SMTP_RELAY:-false}
+      - SMTP_RELAY_HOST=${SMTP_RELAY_HOST:-}
+      - SMTP_RELAY_USERNAME=${SMTP_RELAY_USERNAME:-}
+      - SMTP_RELAY_PASSWORD=${SMTP_RELAY_PASSWORD:-}
+      - SMTP_RELAY_PORT=${SMTP_RELAY_PORT:-2525}
+    volumes:
+      - acme-data:/.acme.sh
+      - landscape-data:/var/lib/landscape
+      - postgres-data:/var/lib/postgresql
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - landscape-net
+
+volumes:
+  acme-data:
+  landscape-data:
+  postgres-data:
+
+networks:
+  landscape-net:
+    driver: bridge

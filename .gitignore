@@ -1,0 +1,6 @@
+*.env
+!.env.example
+.acme.sh/
+acme-data/
+landscape-data/
+postgres-data/

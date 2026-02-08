@@ -122,6 +122,12 @@ openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
 chmod 600 "$KEY_PATH"
 chmod 644 "$CERT_PATH"
 
+# Reload Apache if it's running
+if pgrep -x apache2 >/dev/null 2>&1; then
+  echo "Reloading Apache to use new certificate..."
+  apachectl graceful || true
+fi
+
 echo "Starting Landscape services..."
 lsctl start || true
 

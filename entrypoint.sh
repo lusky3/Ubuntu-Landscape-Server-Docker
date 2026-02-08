@@ -77,6 +77,31 @@ if [ ! -f /var/lib/landscape/.quickstart_done ]; then
   # Fix Apache vhost rewrite - landscape-quickstart generates broken config
   sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' /etc/apache2/sites-available/localhost.conf
   
+  # Regenerate certificate with correct SAN BEFORE starting services
+  echo "Regenerating SSL certificate with SAN..."
+  cat > /tmp/san.cnf <<EOF
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = $FQDN
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = $FQDN
+DNS.2 = landscape-server
+DNS.3 = localhost
+EOF
+  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout "$KEY_PATH" -out "$CERT_PATH" \
+    -config /tmp/san.cnf -extensions v3_req
+  chmod 600 "$KEY_PATH"
+  chmod 644 "$CERT_PATH"
+  
   # Create default admin account
   echo "Creating default admin account..."
   /opt/canonical/landscape/bootstrap-account \
@@ -95,37 +120,6 @@ if [ ! -f /var/lib/landscape/.quickstart_done ]; then
   touch /var/lib/landscape/.quickstart_done
 else
   echo "Skipping landscape-quickstart (already done)."
-fi
-
-# Always regenerate certificate with correct SAN
-echo "Regenerating SSL certificate with SAN..."
-cat > /tmp/san.cnf <<EOF
-[req]
-distinguished_name = req_distinguished_name
-x509_extensions = v3_req
-prompt = no
-
-[req_distinguished_name]
-CN = $FQDN
-
-[v3_req]
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = $FQDN
-DNS.2 = landscape-server
-DNS.3 = localhost
-EOF
-openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-  -keyout "$KEY_PATH" -out "$CERT_PATH" \
-  -config /tmp/san.cnf -extensions v3_req
-chmod 600 "$KEY_PATH"
-chmod 644 "$CERT_PATH"
-
-# Reload Apache if it's running
-if pgrep -x apache2 >/dev/null 2>&1; then
-  echo "Reloading Apache to use new certificate..."
-  apachectl graceful || true
 fi
 
 echo "Starting Landscape services..."

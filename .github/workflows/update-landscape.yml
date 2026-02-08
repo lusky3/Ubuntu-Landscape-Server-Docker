@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.check.outputs.latest }}
       update_available: ${{ steps.check.outputs.update_available }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check Landscape version
         id: check

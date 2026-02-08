@@ -9,3 +9,19 @@ services:
     env_file:
       - .env.local
     restart: unless-stopped
+
+  landscape-client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: landscape-client
+    hostname: landscape-client
+    environment:
+      - LANDSCAPE_URL=https://landscape-server
+      - ACCOUNT_NAME=standalone
+      - COMPUTER_TITLE=Demo Client
+    depends_on:
+      - landscape
+    restart: unless-stopped
+    profiles:
+      - with-client

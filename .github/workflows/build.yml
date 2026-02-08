@@ -53,6 +53,12 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
+          annotations: |
+            org.opencontainers.image.title=Ubuntu Landscape ${{ matrix.image == 'server' && 'Server' || 'Client' }}
+            org.opencontainers.image.description=Ubuntu Landscape ${{ matrix.image == 'server' && 'Server for systems management - self-hosted edition with web interface for managing Ubuntu systems' || 'Client for connecting Ubuntu systems to Landscape Server' }}
+            org.opencontainers.image.url=https://ubuntu.com/landscape
+            org.opencontainers.image.source=https://github.com/lusky3/Ubuntu-Landscape-Server-Docker
+            org.opencontainers.image.licenses=AGPL-3.0
 
       - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v5

@@ -1,4 +1,11 @@
 FROM ubuntu:24.04
+
+LABEL org.opencontainers.image.title="Ubuntu Landscape Server"
+LABEL org.opencontainers.image.description="Ubuntu Landscape Server for systems management - self-hosted edition with web interface for managing Ubuntu systems"
+LABEL org.opencontainers.image.source="https://github.com/lusky3/Ubuntu-Landscape-Server-Docker"
+LABEL org.opencontainers.image.url="https://ubuntu.com/landscape"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

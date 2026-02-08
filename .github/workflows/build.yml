@@ -34,11 +34,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_KEY }}
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image == 'client' && '-client' || '' }}
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image == 'client' && '-client' || '' }}
+            ${{ secrets.DOCKERHUB_USER }}/landscape-server${{ matrix.image == 'client' && '-client' || '' }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -70,3 +78,23 @@ jobs:
         if: github.event_name != 'pull_request'
         with:
           sarif_file: trivy-results.sarif
+
+  notify:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Discord
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "🚀 New images published"
+          description: |
+            **GHCR:**
+            - `ghcr.io/${{ github.repository }}:main`
+            - `ghcr.io/${{ github.repository }}-client:main`
+
+            **Docker Hub:**
+            - `${{ secrets.DOCKERHUB_USER }}/landscape-server:main`
+            - `${{ secrets.DOCKERHUB_USER }}/landscape-server-client:main`
+          color: 0x00ff00

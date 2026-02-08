@@ -57,7 +57,7 @@ jobs:
         run: |
           docker compose up -d landscape
           echo "Waiting for server initialization..."
-          sleep 90
+          sleep 120
 
       - name: Check server health
         run: |
@@ -109,10 +109,13 @@ jobs:
         run: |
           docker compose --profile with-client up -d
           echo "Waiting for initialization..."
-          sleep 90
+          sleep 120
 
       - name: Check client registration
         run: |
+          # Verify containers are running
+          docker ps | grep landscape || exit 1
+
           # Check client is registered
           docker exec landscape-client landscape-config --is-registered | grep -q "True" || exit 1
 

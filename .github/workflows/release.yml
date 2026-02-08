@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 ${{ steps.version.outputs.tag }}^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log --pretty=format:"- %s (%h)" $PREV_TAG..${{ steps.version.outputs.tag }})
+          else
+            CHANGES=$(git log --pretty=format:"- %s (%h)" ${{ steps.version.outputs.tag }})
+          fi
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Get Landscape version
+        id: landscape
+        run: |
+          VERSION=$(cat .landscape-version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body: |
+            ## Landscape Server Docker ${{ steps.version.outputs.tag }}
+            
+            **Landscape Version**: `${{ steps.landscape.outputs.version }}`
+            
+            ### Docker Images
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }}
+            docker pull ghcr.io/${{ github.repository }}-client:${{ steps.version.outputs.tag }}
+            ```
+            
+            ### Changes
+            ${{ steps.changelog.outputs.changes }}
+          draft: false
+          prerelease: false

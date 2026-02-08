@@ -42,4 +42,7 @@ if [ -n "$REGISTRATION_KEY" ]; then
 fi
 
 echo "Starting Landscape client..."
-exec landscape-client --daemon=false
+landscape-client &
+
+# Keep container running
+tail -f /var/log/landscape/sysinfo.log /var/log/landscape/watchdog.log 2>/dev/null || sleep infinity

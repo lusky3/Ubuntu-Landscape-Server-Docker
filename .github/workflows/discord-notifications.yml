@@ -25,7 +25,12 @@ jobs:
             **${{ github.event.pull_request.title }}**
             by @${{ github.event.pull_request.user.login }}
           url: ${{ github.event.pull_request.html_url }}
-          color: ${{ github.event.action == 'closed' && github.event.pull_request.merged && '0x00ff00' || github.event.action == 'opened' && '0x0099ff' || '0xffaa00' }}
+          color: >-
+            ${{
+              github.event.action == 'closed' && github.event.pull_request.merged && '0x00ff00' ||
+              github.event.action == 'opened' && '0x0099ff' ||
+              '0xffaa00'
+            }}
 
       - name: Issue Notification
         if: github.event_name == 'issues'

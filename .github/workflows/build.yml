@@ -37,7 +37,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USER }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_KEY }}
 
       - name: Extract metadata
@@ -46,7 +46,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image == 'client' && '-client' || '' }}
-            ${{ secrets.DOCKERHUB_USER }}/landscape-server${{ matrix.image == 'client' && '-client' || '' }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/landscape-server${{ matrix.image == 'client' && '-client' || '' }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -95,6 +95,6 @@ jobs:
             - `ghcr.io/${{ github.repository }}-client:main`
 
             **Docker Hub:**
-            - `${{ secrets.DOCKERHUB_USER }}/landscape-server:main`
-            - `${{ secrets.DOCKERHUB_USER }}/landscape-server-client:main`
+            - `${{ secrets.DOCKERHUB_USERNAME }}/landscape-server:main`
+            - `${{ secrets.DOCKERHUB_USERNAME }}/landscape-server-client:main`
           color: 0x00ff00

@@ -25,7 +25,7 @@ jobs:
           check-regexp: '(lint|build|test-.*|security-scan)'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
-      
+
       - name: Enable auto-merge
         run: gh pr merge --auto --squash "$PR_NUMBER"
         env:

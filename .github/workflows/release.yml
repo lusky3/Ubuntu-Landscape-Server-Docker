@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Get version
         id: version
         run: |
@@ -28,7 +28,7 @@ jobs:
           else
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -41,13 +41,13 @@ jobs:
           echo "changes<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-      
+
       - name: Get Landscape version
         id: landscape
         run: |
           VERSION=$(cat .landscape-version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -55,15 +55,15 @@ jobs:
           name: Release ${{ steps.version.outputs.tag }}
           body: |
             ## Landscape Server Docker ${{ steps.version.outputs.tag }}
-            
+
             **Landscape Version**: `${{ steps.landscape.outputs.version }}`
-            
+
             ### Docker Images
             ```bash
             docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }}
             docker pull ghcr.io/${{ github.repository }}-client:${{ steps.version.outputs.tag }}
             ```
-            
+
             ### Changes
             ${{ steps.changelog.outputs.changes }}
           draft: false

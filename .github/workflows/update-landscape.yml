@@ -17,7 +17,7 @@ jobs:
       update_available: ${{ steps.check.outputs.update_available }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Check Landscape version
         id: check
         run: |
@@ -30,7 +30,7 @@ jobs:
           ")
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "Latest Landscape version: $LATEST"
-          
+
           # Check if version file exists and compare
           if [ -f .landscape-version ]; then
             CURRENT=$(cat .landscape-version)
@@ -41,13 +41,13 @@ jobs:
           else
             echo "update_available=true" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Update version file
         if: steps.check.outputs.update_available == 'true'
         run: |
           echo "${{ steps.check.outputs.latest }}" > .landscape-version
           echo "Updated to version ${{ steps.check.outputs.latest }}"
-      
+
       - name: Create Pull Request
         if: steps.check.outputs.update_available == 'true'
         id: pr
@@ -57,9 +57,9 @@ jobs:
           title: "Update Landscape to ${{ steps.check.outputs.latest }}"
           body: |
             🔄 Automated Landscape version update detected.
-            
+
             **New version**: `${{ steps.check.outputs.latest }}`
-            
+
             CI will run comprehensive tests. If all pass, this will auto-merge.
           branch: update-landscape-${{ steps.check.outputs.latest }}
           delete-branch: true
@@ -67,7 +67,7 @@ jobs:
             dependencies
             landscape
             auto-merge
-      
+
       - name: Enable auto-merge
         if: steps.check.outputs.update_available == 'true' && steps.pr.outputs.pull-request-number
         run: gh pr merge --auto --squash "${{ steps.pr.outputs.pull-request-number }}"

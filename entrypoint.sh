@@ -4,8 +4,8 @@ set -euo pipefail
 echo "==== Landscape entrypoint starting ===="
 
 FQDN="${LANDSCAPE_FQDN:-landscape-server}"
-CERT_PATH="/etc/ssl/certs/landscape.crt"
-KEY_PATH="/etc/ssl/private/landscape.key"
+CERT_PATH="/etc/ssl/certs/landscape_server.pem"
+KEY_PATH="/etc/ssl/private/landscape_server.key"
 
 echo "Using FQDN: ${FQDN}"
 

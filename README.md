@@ -81,6 +81,31 @@ First startup takes 2-3 minutes:
 
 On first access, you'll see a signup form to create the admin account.
 
+Alternatively, a default admin account is created automatically:
+- Email: `admin@landscape.local`
+- Password: `admin`
+
+**Change the password immediately after first login!**
+
+## Optional: Test Client
+
+To start a test Ubuntu client that auto-enrolls:
+
+```bash
+docker compose --profile with-client up -d
+```
+
+The client will automatically register with the Landscape server. View it in the dashboard under "Computers".
+
+To customize the client:
+```bash
+# Edit compose.yml landscape-client environment:
+LANDSCAPE_URL=https://landscape-server
+ACCOUNT_NAME=standalone
+COMPUTER_TITLE=My Test Client
+REGISTRATION_KEY=optional_key  # If required by account
+```
+
 ## Logs
 
 ```bash

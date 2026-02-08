@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Lint shell scripts
+        run: |
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
+            entrypoint.sh client-entrypoint.sh verify.sh
+      
+      - name: Check Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+      
+      - name: Check client Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.client
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build ${{ matrix.image }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.image == 'server' && 'Dockerfile' || 'Dockerfile.client' }}
+          push: false
+          tags: landscape-${{ matrix.image }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test-server:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Start server
+        run: |
+          docker compose up -d landscape
+          echo "Waiting for server initialization..."
+          sleep 90
+      
+      - name: Check server health
+        run: |
+          # Check Apache is running
+          docker exec landscape-server pgrep apache2 || exit 1
+          
+          # Check HTTPS responds
+          curl -k -f https://localhost:8443 || exit 1
+          
+          # Check login page loads
+          curl -k https://localhost:8443 | grep -q "Landscape" || exit 1
+          
+          # Check certificate is valid
+          docker exec landscape-server openssl x509 -in /etc/ssl/certs/landscape_server.pem -noout -checkend 0 || exit 1
+      
+      - name: Check database
+        run: |
+          docker exec landscape-server su postgres -c "psql -l" | grep -q landscape-standalone-main || exit 1
+      
+      - name: Check services
+        run: |
+          docker exec landscape-server lsctl status | grep -q "landscape-appserver.*running" || exit 1
+      
+      - name: Export logs
+        if: failure()
+        run: |
+          docker logs landscape-server > server-logs.txt
+          docker exec landscape-server cat /var/log/landscape/appserver.log > appserver-logs.txt || true
+      
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
+          path: "*-logs.txt"
+      
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  test-client:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Start server and client
+        run: |
+          docker compose --profile with-client up -d
+          echo "Waiting for initialization..."
+          sleep 90
+      
+      - name: Check client registration
+        run: |
+          # Check client is registered
+          docker exec landscape-client landscape-config --is-registered | grep -q "True" || exit 1
+          
+          # Check client appears in database
+          docker exec landscape-server su postgres -c \
+            "psql landscape-standalone-main -c 'SELECT COUNT(*) FROM pending_computer;'" | grep -q "1" || exit 1
+      
+      - name: Check client communication
+        run: |
+          # Check broker logs for successful exchange
+          docker logs landscape-client 2>&1 | grep -q "Message exchange completed" || \
+          docker logs landscape-client 2>&1 | grep -q "secure-id" || exit 1
+      
+      - name: Export logs
+        if: failure()
+        run: |
+          docker logs landscape-server > server-logs.txt
+          docker logs landscape-client > client-logs.txt
+      
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-logs
+          path: "*-logs.txt"
+      
+      - name: Cleanup
+        if: always()
+        run: docker compose --profile with-client down -v
+
+  security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'

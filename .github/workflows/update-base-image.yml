@@ -1,0 +1,42 @@
+name: Update Base Image
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for Ubuntu updates
+        id: check
+        run: |
+          CURRENT=$(grep "^FROM ubuntu:" Dockerfile | head -1 | cut -d: -f2)
+          LATEST=$(curl -s https://registry.hub.docker.com/v2/repositories/library/ubuntu/tags | jq -r '.results[] | select(.name | test("^24\\.04")) | .name' | head -1)
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "update_available=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Update Dockerfile
+        if: steps.check.outputs.update_available == 'true'
+        run: |
+          sed -i "s|FROM ubuntu:${{ steps.check.outputs.current }}|FROM ubuntu:${{ steps.check.outputs.latest }}|g" Dockerfile Dockerfile.client
+      
+      - name: Create Pull Request
+        if: steps.check.outputs.update_available == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update Ubuntu base image to ${{ steps.check.outputs.latest }}"
+          title: "Update Ubuntu base image to ${{ steps.check.outputs.latest }}"
+          body: |
+            Automated update of Ubuntu base image.
+            
+            - Current: `${{ steps.check.outputs.current }}`
+            - Latest: `${{ steps.check.outputs.latest }}`
+          branch: update-ubuntu-base
+          delete-branch: true

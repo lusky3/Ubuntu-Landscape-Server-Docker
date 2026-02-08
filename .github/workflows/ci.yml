@@ -17,12 +17,12 @@ jobs:
             entrypoint.sh client-entrypoint.sh verify.sh
       
       - name: Check Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
       
       - name: Check client Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile.client
 

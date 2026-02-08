@@ -6,8 +6,6 @@ services:
       - "8080:80"
       - "8443:443"
     hostname: landscape-server
-    env_file:
-      - .env.local
     restart: unless-stopped
     volumes:
       - landscape-data:/var/lib/landscape

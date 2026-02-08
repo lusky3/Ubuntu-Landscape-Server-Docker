@@ -76,6 +76,7 @@ if [ ! -f /var/lib/landscape/.quickstart_done ]; then
   
   # Fix Apache vhost rewrite - landscape-quickstart generates broken config
   sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' /etc/apache2/sites-available/localhost.conf
+  sed -i 's|https://%{HTTP_HOST}:443/|https://%{HTTP_HOST}/|g' /etc/apache2/sites-available/localhost.conf
   
   # Regenerate certificate with correct SAN BEFORE starting services
   echo "Regenerating SSL certificate with SAN..."
@@ -124,6 +125,15 @@ fi
 
 echo "Starting Landscape services..."
 lsctl start || true
+
+# Fix CSP to allow localhost access
+echo "Configuring CSP for localhost access..."
+cat >> /etc/apache2/sites-available/localhost.conf <<'CSPEOF'
+
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'self' https://localhost:* localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://localhost:* localhost:* assets.ubuntu.com www.googletagmanager.com www.google-analytics.com script.crazyegg.com www.google.com www.google.ca https://*.maze.co/; style-src 'self' 'unsafe-inline' https://localhost:* localhost:* assets.ubuntu.com https://*.maze.co/; img-src 'self' https://localhost:* localhost:* assets.ubuntu.com data: www.googletagmanager.com www.google-analytics.com script.crazyegg.com www.google.com www.google.ca https://*.maze.co/; connect-src 'self' https://localhost:* localhost:* https://*.maze.co/"
+</IfModule>
+CSPEOF
 
 if pgrep -x apache2 >/dev/null 2>&1; then
   echo "Stopping background Apache..."

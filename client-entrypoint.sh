@@ -14,7 +14,7 @@ if [ ! -f /etc/landscape/.configured ]; then
 
   # Wait for server to be ready
   echo "Waiting for server..."
-  for i in {1..30}; do
+  for _ in {1..30}; do
     if openssl s_client -connect landscape-server:443 </dev/null 2>/dev/null | grep -q "BEGIN CERTIFICATE"; then
       break
     fi

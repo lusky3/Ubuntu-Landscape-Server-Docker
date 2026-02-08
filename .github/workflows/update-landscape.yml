@@ -8,41 +8,83 @@ on:
 jobs:
   check-landscape:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.latest }}
+      update_available: ${{ steps.check.outputs.update_available }}
     steps:
       - uses: actions/checkout@v4
       
       - name: Check Landscape version
         id: check
         run: |
-          docker run --rm ubuntu:24.04 bash -c "
-            apt-get update -qq
-            apt-cache policy landscape-server | grep Candidate | awk '{print \$2}'
-          " > /tmp/latest_version
-          LATEST=$(cat /tmp/latest_version)
+          LATEST=$(docker run --rm ubuntu:24.04 bash -c "
+            apt-get update -qq 2>/dev/null
+            apt-add-repository -y ppa:landscape/self-hosted-24.04 2>/dev/null
+            apt-get update -qq 2>/dev/null
+            apt-cache policy landscape-server-quickstart | grep Candidate | awk '{print \$2}'
+          ")
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "Latest Landscape version: $LATEST"
-      
-      - name: Update README
-        run: |
-          VERSION="${{ steps.check.outputs.latest }}"
-          DATE=$(date +%Y-%m-%d)
-          if ! grep -q "Landscape.*$VERSION" README.md; then
-            sed -i "s/Landscape Server [0-9.]*/Landscape Server $VERSION/" README.md || true
-            echo "Updated README with version $VERSION"
-            echo "update_made=true" >> $GITHUB_ENV
+          
+          # Check if version file exists and compare
+          if [ -f .landscape-version ]; then
+            CURRENT=$(cat .landscape-version)
+            if [ "$CURRENT" != "$LATEST" ]; then
+              echo "update_available=true" >> $GITHUB_OUTPUT
+              echo "Update available: $CURRENT -> $LATEST"
+            fi
+          else
+            echo "update_available=true" >> $GITHUB_OUTPUT
           fi
       
+      - name: Update version file
+        if: steps.check.outputs.update_available == 'true'
+        run: |
+          echo "${{ steps.check.outputs.latest }}" > .landscape-version
+          echo "Updated to version ${{ steps.check.outputs.latest }}"
+      
       - name: Create Pull Request
-        if: env.update_made == 'true'
+        if: steps.check.outputs.update_available == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "chore: update Landscape version to ${{ steps.check.outputs.latest }}"
+          commit-message: "chore: update Landscape to ${{ steps.check.outputs.latest }}"
           title: "Update Landscape to ${{ steps.check.outputs.latest }}"
           body: |
-            Automated Landscape version update.
+            🔄 Automated Landscape version update detected.
             
-            Latest available: `${{ steps.check.outputs.latest }}`
+            **New version**: `${{ steps.check.outputs.latest }}`
             
-            Please test before merging.
-          branch: update-landscape-version
+            This PR will trigger a build to test the new version.
+          branch: update-landscape-${{ steps.check.outputs.latest }}
           delete-branch: true
+  
+  test-build:
+    needs: check-landscape
+    if: needs.check-landscape.outputs.update_available == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: update-landscape-${{ needs.check-landscape.outputs.version }}
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build test images
+        run: |
+          docker build -t landscape-test:${{ needs.check-landscape.outputs.version }} .
+          docker build -f Dockerfile.client -t landscape-client-test:${{ needs.check-landscape.outputs.version }} .
+      
+      - name: Test deployment
+        run: |
+          docker compose up -d
+          sleep 60
+          
+          # Check server is responding
+          curl -k https://localhost:8443 | grep -q "Landscape" || exit 1
+          
+          echo "✅ Build and basic test passed for version ${{ needs.check-landscape.outputs.version }}"
+      
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

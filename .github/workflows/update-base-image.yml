@@ -29,7 +29,7 @@ jobs:
       
       - name: Create Pull Request
         if: steps.check.outputs.update_available == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: update Ubuntu base image to ${{ steps.check.outputs.latest }}"
           title: "Update Ubuntu base image to ${{ steps.check.outputs.latest }}"

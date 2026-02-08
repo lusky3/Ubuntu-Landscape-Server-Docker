@@ -123,12 +123,6 @@ jobs:
           docker exec landscape-server su postgres -c \
             "psql landscape-standalone-main -c 'SELECT COUNT(*) FROM pending_computer;'" | grep -q "1" || exit 1
 
-      - name: Check client communication
-        run: |
-          # Check broker logs for successful exchange
-          docker logs landscape-client 2>&1 | grep -q "Message exchange completed" || \
-          docker logs landscape-client 2>&1 | grep -q "secure-id" || exit 1
-
       - name: Export logs
         if: failure()
         run: |

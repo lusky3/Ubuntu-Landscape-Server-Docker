@@ -11,6 +11,11 @@ echo "Configuring Landscape client..."
 # Create config directory
 mkdir -p /etc/landscape
 
+# Fetch server certificate
+echo "Fetching server certificate..."
+openssl s_client -connect landscape-server:443 -showcerts </dev/null 2>/dev/null | \
+  openssl x509 -outform PEM > /tmp/landscape-server.pem
+
 # Write client config
 cat > /etc/landscape/client.conf <<EOF
 [client]
@@ -21,6 +26,7 @@ computer_title = $COMPUTER_TITLE
 script_users = ALL
 tags = container
 log_level = info
+ssl_public_key = /tmp/landscape-server.pem
 EOF
 
 # Add registration key if provided

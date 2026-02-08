@@ -60,6 +60,14 @@ if [ ! -f /var/lib/landscape/.quickstart_done ]; then
   # Fix Apache vhost rewrite - landscape-quickstart generates broken config
   sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' /etc/apache2/sites-available/localhost.conf
   
+  # Create default admin account
+  echo "Creating default admin account..."
+  /opt/canonical/landscape/bootstrap-account \
+    --admin_email admin@landscape.local \
+    --admin_password admin \
+    --admin_name "Admin User" \
+    --root_url https://localhost || true
+  
   touch /var/lib/landscape/.quickstart_done
 else
   echo "Skipping landscape-quickstart (already done)."

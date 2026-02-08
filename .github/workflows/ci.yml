@@ -116,7 +116,17 @@ jobs:
           # Verify containers are running
           docker ps | grep landscape || exit 1
 
-          # Check client is registered
+          # Wait for client to register (may take additional time)
+          echo "Waiting for client registration..."
+          for i in {1..30}; do
+            if docker exec landscape-client landscape-config --is-registered | grep -q "True"; then
+              echo "Client registered successfully"
+              break
+            fi
+            sleep 2
+          done
+
+          # Verify registration
           docker exec landscape-client landscape-config --is-registered | grep -q "True" || exit 1
 
           # Check client appears in database

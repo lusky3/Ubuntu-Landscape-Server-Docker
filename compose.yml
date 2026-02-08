@@ -9,6 +9,8 @@ services:
     env_file:
       - .env.local
     restart: unless-stopped
+    volumes:
+      - landscape-data:/var/lib/landscape
 
   landscape-client:
     build:
@@ -23,5 +25,10 @@ services:
     depends_on:
       - landscape
     restart: unless-stopped
+    volumes:
+      - landscape-data:/var/lib/landscape:ro
     profiles:
       - with-client
+
+volumes:
+  landscape-data:

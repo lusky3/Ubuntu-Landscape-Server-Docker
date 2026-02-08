@@ -114,6 +114,13 @@ EOF
     --admin_name "Admin User" \
     --root_url https://localhost || true
   
+  # Generate registration key for pre-enrollment
+  echo "Generating registration key..."
+  REGISTRATION_KEY=$(openssl rand -hex 16)
+  echo "$REGISTRATION_KEY" > /var/lib/landscape/registration-key.txt
+  chmod 644 /var/lib/landscape/registration-key.txt
+  echo "Registration key saved to /var/lib/landscape/registration-key.txt"
+  
   touch /var/lib/landscape/.quickstart_done
 else
   echo "Skipping landscape-quickstart (already done)."

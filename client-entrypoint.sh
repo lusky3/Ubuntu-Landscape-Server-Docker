@@ -3,8 +3,15 @@ set -euo pipefail
 
 LANDSCAPE_URL="${LANDSCAPE_URL:-https://landscape-server}"
 ACCOUNT_NAME="${ACCOUNT_NAME:-standalone}"
-REGISTRATION_KEY="${REGISTRATION_KEY:-}"
 COMPUTER_TITLE="${COMPUTER_TITLE:-$(hostname)}"
+
+# Read registration key from shared volume if available
+if [ -f /var/lib/landscape/registration-key.txt ]; then
+  REGISTRATION_KEY=$(cat /var/lib/landscape/registration-key.txt)
+  echo "Using registration key from server"
+else
+  REGISTRATION_KEY="${REGISTRATION_KEY:-}"
+fi
 
 echo "Configuring Landscape client..."
 

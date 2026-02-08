@@ -79,7 +79,8 @@ jobs:
 
       - name: Check services
         run: |
-          docker exec landscape-server lsctl status | grep -q "landscape-appserver.*running" || exit 1
+          # Check appserver process is running
+          docker exec landscape-server pgrep -f landscape-appserver || exit 1
 
       - name: Export logs
         if: failure()

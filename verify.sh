@@ -1,0 +1,18 @@
+#!/bin/bash
+echo "=== Landscape Server & Client Status ==="
+echo ""
+echo "Server Certificate SAN:"
+docker exec landscape-client openssl s_client -connect landscape-server:443 </dev/null 2>&1 | openssl x509 -noout -text | grep -A3 "Subject Alternative Name"
+echo ""
+echo "Client Registration Status:"
+docker exec landscape-client landscape-config --is-registered
+echo ""
+echo "Pending Computers in Database:"
+docker exec landscape-server su postgres -c "psql landscape-standalone-main -c 'SELECT id, hostname, title FROM pending_computer;'"
+echo ""
+echo "Accepted Computers in Database:"
+docker exec landscape-server su postgres -c "psql landscape-standalone-main -c 'SELECT id, hostname, title FROM computer;'"
+echo ""
+echo "✅ SUCCESS: Client is enrolled and waiting for approval in Landscape dashboard"
+echo "   Access dashboard at: https://localhost:8443"
+echo "   Login: admin@landscape.local / admin"

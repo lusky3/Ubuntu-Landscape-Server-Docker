@@ -146,7 +146,7 @@ This project includes a comprehensive automated CI/CD pipeline:
 - **Landscape Version Tracking**: Weekly checks for new Landscape releases from Ubuntu PPA
 - **Base Image Updates**: Weekly checks for Ubuntu base image updates
 - **Dependabot**: Automatic dependency updates for GitHub Actions and Docker
-- **Auto-merge**: Dependabot PRs for minor/patch updates auto-merge after CI passes
+- **Auto-merge**: PRs with `auto-merge` label will auto-merge after CI passes (requires manual approval for workflow changes due to GitHub security restrictions)
 
 ### Publishing
 Images are automatically built and published to both registries on every push to main:

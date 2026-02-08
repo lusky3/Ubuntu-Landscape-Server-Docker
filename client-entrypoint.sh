@@ -42,4 +42,4 @@ if [ -n "$REGISTRATION_KEY" ]; then
 fi
 
 echo "Starting Landscape client..."
-exec landscape-client
+exec landscape-client --daemon=false

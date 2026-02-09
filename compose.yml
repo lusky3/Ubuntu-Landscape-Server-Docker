@@ -4,11 +4,13 @@ services:
     container_name: landscape-server
     ports:
       - "8080:80"
-      - "8443:443"
+      - "443:443"
     hostname: landscape-server
     restart: unless-stopped
     volumes:
       - landscape-data:/var/lib/landscape
+    environment:
+      - LANDSCAPE_FQDN=${LANDSCAPE_FQDN:-localhost}
 
   landscape-client:
     build:

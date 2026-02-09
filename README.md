@@ -39,7 +39,7 @@ UBUNTU_PRO_TOKEN=your_actual_token_here
 docker compose up -d
 ```
 
-4. Access Landscape at https://localhost:8443
+4. Access Landscape at https://localhost
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ See [acme.sh DNS API docs](https://github.com/acmesh-official/acme.sh/wiki/dnsap
 ## Ports
 
 - `8080`: HTTP (redirects to HTTPS)
-- `8443`: HTTPS (main access)
+- `443`: HTTPS (main access)
 
 ## First Boot
 
@@ -178,7 +178,7 @@ docker compose up -d
 docker compose --profile with-client up -d
 
 # Check server health
-curl -k https://localhost:8443
+curl -k https://localhost
 
 # Check client registration
 docker exec landscape-client landscape-config --is-registered

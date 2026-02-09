@@ -65,10 +65,10 @@ jobs:
           docker exec landscape-server pgrep apache2 || exit 1
 
           # Check HTTPS responds
-          curl -k -f https://localhost:8443 || exit 1
+          curl -k -f https://localhost:443 || exit 1
 
           # Check login page loads
-          curl -k https://localhost:8443 | grep -q "Landscape" || exit 1
+          curl -k https://localhost:443 | grep -q "Landscape" || exit 1
 
           # Check certificate is valid
           docker exec landscape-server openssl x509 -in /etc/ssl/certs/landscape_server.pem -noout -checkend 0 || exit 1

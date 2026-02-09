@@ -61,6 +61,7 @@ jobs:
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          nodetail: true
           title: "❌ Workflow Failed: ${{ github.event.workflow_run.name }}"
           description: |
             Branch: `${{ github.event.workflow_run.head_branch }}`

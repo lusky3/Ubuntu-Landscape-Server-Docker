@@ -143,11 +143,16 @@ sleep 2
 
 # Generate hash-id databases for package reporting
 if [ ! -f /var/lib/landscape/.hash_id_done ]; then
-  echo "Generating hash-id databases (this may take a few minutes)..."
-  mkdir -p /var/lib/landscape/hash-id-databases
-  python3 /opt/canonical/landscape/hash-id-databases \
-    --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf || true
-  touch /var/lib/landscape/.hash_id_done
+  if [ "${SKIP_HASH_ID_GENERATION:-false}" = "true" ]; then
+    echo "Skipping hash-id database generation (SKIP_HASH_ID_GENERATION=true)"
+    touch /var/lib/landscape/.hash_id_done
+  else
+    echo "Generating hash-id databases (this may take a few minutes)..."
+    mkdir -p /var/lib/landscape/hash-id-databases
+    python3 /opt/canonical/landscape/hash-id-databases \
+      --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf || true
+    touch /var/lib/landscape/.hash_id_done
+  fi
 else
   echo "Hash-id databases already generated."
 fi

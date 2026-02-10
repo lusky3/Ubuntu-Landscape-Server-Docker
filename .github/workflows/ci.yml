@@ -56,6 +56,8 @@ jobs:
           docker compose up -d landscape
           echo "Waiting for server initialization..."
           sleep 120
+        env:
+          SKIP_HASH_ID_GENERATION: "true"
 
       - name: Check server health
         run: |
@@ -108,6 +110,8 @@ jobs:
           docker compose --profile with-client up -d
           echo "Waiting for initialization..."
           sleep 120
+        env:
+          SKIP_HASH_ID_GENERATION: "true"
 
       - name: Check client registration
         run: |

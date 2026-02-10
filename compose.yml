@@ -11,6 +11,7 @@ services:
       - landscape-data:/var/lib/landscape
     environment:
       - LANDSCAPE_FQDN=${LANDSCAPE_FQDN:-localhost}
+      - SKIP_HASH_ID_GENERATION=${SKIP_HASH_ID_GENERATION:-false}
 
   landscape-client:
     build:

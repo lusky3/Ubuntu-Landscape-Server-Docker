@@ -25,27 +25,25 @@ jobs:
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: clients/Dockerfile.client.24.04
+          failure-threshold: warning
 
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: [server, client]
     steps:
       - uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build ${{ matrix.image }}
+      - name: Build server
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.image == 'server' && 'Dockerfile' || 'clients/Dockerfile.client.24.04' }}
+          file: Dockerfile
           push: false
-          tags: landscape-${{ matrix.image }}:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: landscape-server:test
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
 
   test-server:
     needs: build

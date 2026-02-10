@@ -12,14 +12,14 @@ All-in-one Docker container for Ubuntu Landscape Server with automatic SSL certi
 
 Pull from Docker Hub:
 ```bash
-docker pull <username>/landscape-server:main
-docker pull <username>/landscape-server-client:main
+docker pull <username>/landscape-server:latest
+docker pull <username>/landscape-server-client:latest
 ```
 
 Or use GitHub Container Registry:
 ```bash
-docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker/landscape:main
-docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker/landscape-client:main
+docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker/landscape:latest
+docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker/landscape-client:latest
 ```
 
 ### Building Locally
@@ -125,6 +125,7 @@ Client images are available for multiple Ubuntu versions:
 - `16.04` (Xenial) - EOL
 - `18.04` (Bionic) - EOL
 - `20.04` (Focal) - LTS
+- `22.04` (Jammy) - LTS
 - `24.04` (Noble) - LTS
 - `25.10` (Plucky)
 
@@ -150,6 +151,7 @@ docker pull <username>/landscape-server-client:18.04
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:16.04`
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:18.04`
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:20.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:22.04`
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:24.04`
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:25.10`
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:latest` (24.04)
@@ -160,6 +162,7 @@ docker pull <username>/landscape-server-client:18.04
 - `<username>/landscape-server-client:16.04`
 - `<username>/landscape-server-client:18.04`
 - `<username>/landscape-server-client:20.04`
+- `<username>/landscape-server-client:22.04`
 - `<username>/landscape-server-client:24.04`
 - `<username>/landscape-server-client:25.10`
 - `<username>/landscape-server-client:latest` (24.04)

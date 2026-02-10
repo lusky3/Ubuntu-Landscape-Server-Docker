@@ -29,6 +29,7 @@ jobs:
           - clients/Dockerfile.client.16.04
           - clients/Dockerfile.client.18.04
           - clients/Dockerfile.client.20.04
+          - clients/Dockerfile.client.22.04
           - clients/Dockerfile.client.24.04
           - clients/Dockerfile.client.25.10
     steps:

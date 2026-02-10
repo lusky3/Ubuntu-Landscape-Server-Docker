@@ -21,24 +21,43 @@ jobs:
       - name: Check Landscape version
         id: check
         run: |
+          set -e
+          echo "Checking latest Landscape version from PPA..."
+          
           LATEST=$(docker run --rm ubuntu:24.04 bash -c "
-            apt-get update -qq 2>/dev/null
-            apt-get install -y software-properties-common 2>/dev/null
-            apt-add-repository -y ppa:landscape/self-hosted-24.04 2>/dev/null
-            apt-get update -qq 2>/dev/null
-            apt-cache policy landscape-server-quickstart | grep Candidate | awk '{print \$2}'
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq >/dev/null 2>&1
+            apt-get install -y --no-install-recommends software-properties-common >/dev/null 2>&1
+            apt-add-repository -y ppa:landscape/self-hosted-24.04 >/dev/null 2>&1
+            apt-get update -qq >/dev/null 2>&1
+            apt-cache policy landscape-server-quickstart | grep 'Candidate:' | awk '{print \\\$2}'
           ")
+          
+          # Trim whitespace and validate
+          LATEST=$(echo "$LATEST" | tr -d '[:space:]')
+          
+          if [ -z "$LATEST" ] || [ "$LATEST" = "(none)" ]; then
+            echo "Error: Failed to retrieve Landscape version"
+            exit 1
+          fi
+          
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "Latest Landscape version: $LATEST"
 
           # Check if version file exists and compare
           if [ -f .landscape-version ]; then
-            CURRENT=$(cat .landscape-version)
+            CURRENT=$(cat .landscape-version | tr -d '[:space:]')
+            echo "Current version: $CURRENT"
             if [ "$CURRENT" != "$LATEST" ]; then
               echo "update_available=true" >> $GITHUB_OUTPUT
               echo "Update available: $CURRENT -> $LATEST"
+            else
+              echo "Already up to date"
+              echo "update_available=false" >> $GITHUB_OUTPUT
             fi
           else
+            echo "No version file found, creating initial version"
             echo "update_available=true" >> $GITHUB_OUTPUT
           fi
 

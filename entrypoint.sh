@@ -78,6 +78,19 @@ if [ ! -f /var/lib/landscape/.quickstart_done ]; then
   sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' /etc/apache2/sites-available/localhost.conf
   sed -i 's|https://%{HTTP_HOST}:443/|https://%{HTTP_HOST}/|g' /etc/apache2/sites-available/localhost.conf
   
+  # Fix 1: Add /ping rewrite to HTTPS VirtualHost
+  echo "Adding /ping endpoint to HTTPS VirtualHost..."
+  sed -i '/^    RewriteEngine On$/a\    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]' /etc/apache2/sites-available/localhost.conf
+  
+  # Add /ping rewrite to HTTPS VirtualHost (after RewriteEngine On in the 443 vhost)
+  echo "Adding /ping endpoint to HTTPS VirtualHost..."
+  sed -i '/^<VirtualHost \*:443>/,/^<\/VirtualHost>/ {
+    /RewriteEngine On/a\
+\
+    # Landscape Ping Server on port 8070\
+    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]
+  }' /etc/apache2/sites-available/localhost.conf
+  
   # Regenerate certificate with correct SAN BEFORE starting services
   echo "Regenerating SSL certificate with SAN..."
   cat > /tmp/san.cnf <<EOF
@@ -123,8 +136,29 @@ else
   echo "Skipping landscape-quickstart (already done)."
 fi
 
+# Start rsyslog for package-search service
+echo "Starting rsyslog..."
+rsyslogd || true
+sleep 2
+
+# Generate hash-id databases for package reporting
+if [ ! -f /var/lib/landscape/.hash_id_done ]; then
+  echo "Generating hash-id databases (this may take a few minutes)..."
+  mkdir -p /var/lib/landscape/hash-id-databases
+  python3 /opt/canonical/landscape/hash-id-databases \
+    --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf || true
+  touch /var/lib/landscape/.hash_id_done
+else
+  echo "Hash-id databases already generated."
+fi
+
 echo "Starting Landscape services..."
 lsctl start || true
+
+# Start package-search service (no init.d script, only systemd unit)
+echo "Starting landscape-package-search..."
+/opt/canonical/landscape/go/bin/packagesearch \
+  -config /etc/landscape/service.conf &
 
 # Fix CSP to allow localhost access
 echo "Configuring CSP for localhost access..."

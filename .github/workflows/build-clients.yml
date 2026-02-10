@@ -1,17 +1,21 @@
 ---
-name: Build and Publish
+name: Build and Publish Client Images
 
 'on':
   push:
     branches: [main]
-    tags: ['v*']
+    paths:
+      - 'clients/**'
+      - 'client-entrypoint.sh'
+      - '.github/workflows/build-clients.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-clients:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,7 +23,7 @@ jobs:
       security-events: write
     strategy:
       matrix:
-        image: [server, client]
+        version: ['12.04', '14.04', '16.04', '18.04', '24.04', '25.10']
 
     steps:
       - uses: actions/checkout@v6
@@ -45,48 +49,46 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image == 'client' && '-client' || '' }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/landscape-server${{ matrix.image == 'client' && '-client' || '' }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-client
+            ${{ secrets.DOCKERHUB_USERNAME }}/landscape-server-client
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
+            type=raw,value=${{ matrix.version }}
+            type=raw,value=latest,enable=${{ matrix.version == '24.04' }}
+          flavor: |
+            latest=false
           annotations: |
-            org.opencontainers.image.title=Ubuntu Landscape ${{ matrix.image == 'server' && 'Server' || 'Client' }}
-            org.opencontainers.image.description=Ubuntu Landscape ${{ matrix.image == 'server' && 'Server for systems management - self-hosted edition with web interface for managing Ubuntu systems' || 'Client for connecting Ubuntu systems to Landscape Server' }}
+            org.opencontainers.image.title=Ubuntu Landscape Client ${{ matrix.version }}
+            org.opencontainers.image.description=Ubuntu Landscape Client for connecting Ubuntu ${{ matrix.version }} systems to Landscape Server
             org.opencontainers.image.url=https://ubuntu.com/landscape
             org.opencontainers.image.source=https://github.com/lusky3/Ubuntu-Landscape-Server-Docker
             org.opencontainers.image.licenses=AGPL-3.0
 
-      - name: Build and push ${{ matrix.image }}
+      - name: Build and push client ${{ matrix.version }}
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.image == 'server' && 'Dockerfile' || 'clients/Dockerfile.client.24.04' }}
+          file: clients/Dockerfile.client.${{ matrix.version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=client-${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=client-${{ matrix.version }}
 
       - name: Run Trivy security scan
-        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: sarif
-          output: trivy-results.sarif
+          output: trivy-results-${{ matrix.version }}.sarif
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
-        if: github.event_name != 'pull_request'
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy-results-${{ matrix.version }}.sarif
+          category: client-${{ matrix.version }}
 
   notify:
-    needs: build
+    needs: build-clients
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -94,13 +96,11 @@ jobs:
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          title: "🚀 New images published"
+          title: "🚀 Client images published"
           description: |
-            **GHCR:**
-            - `ghcr.io/${{ github.repository }}:main`
-            - `ghcr.io/${{ github.repository }}-client:main`
+            **All Ubuntu versions published:**
+            - 12.04, 14.04, 16.04, 18.04, 24.04, 25.10
 
-            **Docker Hub:**
-            - `${{ secrets.DOCKERHUB_USERNAME }}/landscape-server:main`
-            - `${{ secrets.DOCKERHUB_USERNAME }}/landscape-server-client:main`
+            **GHCR:** `ghcr.io/${{ github.repository }}-client:<version>`
+            **Docker Hub:** `${{ secrets.DOCKERHUB_USERNAME }}/landscape-server-client:<version>`
           color: 0x00ff00

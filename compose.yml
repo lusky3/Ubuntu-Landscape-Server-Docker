@@ -15,7 +15,7 @@ services:
   landscape-client:
     build:
       context: .
-      dockerfile: Dockerfile.client
+      dockerfile: clients/Dockerfile.client.24.04
     container_name: landscape-client
     hostname: landscape-client
     environment:

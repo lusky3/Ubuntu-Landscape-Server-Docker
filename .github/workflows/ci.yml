@@ -21,10 +21,10 @@ jobs:
         with:
           dockerfile: Dockerfile
 
-      - name: Check client Dockerfile
+      - name: Check client Dockerfiles
         uses: hadolint/hadolint-action@v3.3.0
         with:
-          dockerfile: Dockerfile.client
+          dockerfile: clients/Dockerfile.client.24.04
 
   build:
     runs-on: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.image == 'server' && 'Dockerfile' || 'Dockerfile.client' }}
+          file: ${{ matrix.image == 'server' && 'Dockerfile' || 'clients/Dockerfile.client.24.04' }}
           push: false
           tags: landscape-${{ matrix.image }}:test
           cache-from: type=gha

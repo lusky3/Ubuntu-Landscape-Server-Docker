@@ -117,6 +117,30 @@ docker compose --profile with-client up -d
 
 The client will automatically register with the Landscape server. View it in the dashboard under "Computers".
 
+### Multiple Ubuntu Versions
+
+Client images are available for multiple Ubuntu versions:
+- `12.04` (Precise) - EOL
+- `14.04` (Trusty) - EOL
+- `16.04` (Xenial) - EOL
+- `18.04` (Bionic) - EOL
+- `24.04` (Noble) - LTS
+- `25.10` (Plucky)
+
+To use a specific version, modify `compose.yml`:
+```yaml
+landscape-client:
+  build:
+    context: .
+    dockerfile: clients/Dockerfile.client.18.04  # Change version here
+```
+
+Or pull pre-built images:
+```bash
+docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker-client:18.04
+docker pull <username>/landscape-server-client:18.04
+```
+
 To customize the client:
 ```bash
 # Edit compose.yml landscape-client environment:

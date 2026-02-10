@@ -20,13 +20,23 @@ jobs:
 
   hadolint:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dockerfile:
+          - Dockerfile
+          - clients/Dockerfile.client.12.04
+          - clients/Dockerfile.client.14.04
+          - clients/Dockerfile.client.16.04
+          - clients/Dockerfile.client.18.04
+          - clients/Dockerfile.client.24.04
+          - clients/Dockerfile.client.25.10
     steps:
       - uses: actions/checkout@v6
 
-      - name: Run Hadolint
+      - name: Run Hadolint on ${{ matrix.dockerfile }}
         uses: hadolint/hadolint-action@v3.3.0
         with:
-          dockerfile: Dockerfile
+          dockerfile: ${{ matrix.dockerfile }}
           failure-threshold: error
           ignore: DL3008
 

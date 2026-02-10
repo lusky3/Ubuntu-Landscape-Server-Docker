@@ -1,0 +1,74 @@
+---
+name: Test Client Images
+
+'on':
+  pull_request:
+    paths:
+      - 'clients/**'
+      - 'client-entrypoint.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'clients/**'
+      - 'client-entrypoint.sh'
+  workflow_dispatch:
+
+jobs:
+  test-clients:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['12.04', '14.04', '16.04', '18.04', '24.04', '25.10']
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build client ${{ matrix.version }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: clients/Dockerfile.client.${{ matrix.version }}
+          push: false
+          tags: landscape-client:${{ matrix.version }}
+          cache-from: type=gha,scope=client-${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=client-${{ matrix.version }}
+
+      - name: Test landscape-client installation
+        run: |
+          # Start container
+          CONTAINER_ID=$(docker run -d landscape-client:${{ matrix.version }} sleep 300)
+          sleep 5
+
+          # Check if landscape-client is installed
+          echo "Checking if landscape-client is installed..."
+          docker exec "$CONTAINER_ID" which landscape-client
+
+          # Check version
+          echo "Checking landscape-client version..."
+          docker exec "$CONTAINER_ID" dpkg -l landscape-client | grep landscape-client
+
+          # Test if executable
+          echo "Testing if landscape-client is executable..."
+          docker exec "$CONTAINER_ID" landscape-client --help
+
+          # Cleanup
+          docker stop "$CONTAINER_ID"
+          docker rm "$CONTAINER_ID"
+
+          echo "✓ Ubuntu ${{ matrix.version }} client test passed"
+
+      - name: Export logs on failure
+        if: failure()
+        run: |
+          docker logs $(docker ps -aq --filter ancestor=landscape-client:${{ matrix.version }}) > client-${{ matrix.version }}-logs.txt || true
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-${{ matrix.version }}-logs
+          path: client-${{ matrix.version }}-logs.txt

@@ -23,7 +23,7 @@ jobs:
         run: |
           set -e
           echo "Checking latest Landscape version from PPA..."
-          
+
           LATEST=$(docker run --rm ubuntu:24.04 bash -c "
             set -e
             export DEBIAN_FRONTEND=noninteractive
@@ -33,15 +33,15 @@ jobs:
             apt-get update -qq >/dev/null 2>&1
             apt-cache policy landscape-server-quickstart | grep 'Candidate:' | awk '{print \\\$2}'
           ")
-          
+
           # Trim whitespace and validate
           LATEST=$(echo "$LATEST" | tr -d '[:space:]')
-          
+
           if [ -z "$LATEST" ] || [ "$LATEST" = "(none)" ]; then
             echo "Error: Failed to retrieve Landscape version"
             exit 1
           fi
-          
+
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "Latest Landscape version: $LATEST"
 

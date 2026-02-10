@@ -58,7 +58,8 @@ jobs:
             latest=false
           annotations: |
             org.opencontainers.image.title=Ubuntu Landscape Client ${{ matrix.version }}
-            org.opencontainers.image.description=Ubuntu Landscape Client for connecting Ubuntu ${{ matrix.version }} systems to Landscape Server
+            org.opencontainers.image.description=Ubuntu Landscape Client \
+              for connecting Ubuntu ${{ matrix.version }} systems to Landscape Server
             org.opencontainers.image.url=https://ubuntu.com/landscape
             org.opencontainers.image.source=https://github.com/lusky3/Ubuntu-Landscape-Server-Docker
             org.opencontainers.image.licenses=AGPL-3.0

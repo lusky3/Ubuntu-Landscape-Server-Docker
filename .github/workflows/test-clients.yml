@@ -40,7 +40,8 @@ jobs:
       - name: Test landscape-client installation
         run: |
           # Start container
-          CONTAINER_ID=$(docker run -d landscape-client:${{ matrix.version }} sleep 300)
+          CONTAINER_ID=$(docker run -d \
+            landscape-client:${{ matrix.version }} sleep 300)
           sleep 5
 
           # Check if landscape-client is installed
@@ -64,7 +65,9 @@ jobs:
       - name: Export logs on failure
         if: failure()
         run: |
-          docker logs $(docker ps -aq --filter ancestor=landscape-client:${{ matrix.version }}) > client-${{ matrix.version }}-logs.txt || true
+          docker logs $(docker ps -aq \
+            --filter ancestor=landscape-client:${{ matrix.version }}) \
+            > client-${{ matrix.version }}-logs.txt || true
 
       - name: Upload logs
         if: failure()

@@ -124,6 +124,7 @@ Client images are available for multiple Ubuntu versions:
 - `14.04` (Trusty) - EOL
 - `16.04` (Xenial) - EOL
 - `18.04` (Bionic) - EOL
+- `20.04` (Focal) - LTS
 - `24.04` (Noble) - LTS
 - `25.10` (Plucky)
 
@@ -140,6 +141,28 @@ Or pull pre-built images:
 docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker-client:18.04
 docker pull <username>/landscape-server-client:18.04
 ```
+
+#### Available Pre-built Images
+
+**GitHub Container Registry:**
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:12.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:14.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:16.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:18.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:20.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:24.04`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:25.10`
+- `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:latest` (24.04)
+
+**Docker Hub:**
+- `<username>/landscape-server-client:12.04`
+- `<username>/landscape-server-client:14.04`
+- `<username>/landscape-server-client:16.04`
+- `<username>/landscape-server-client:18.04`
+- `<username>/landscape-server-client:20.04`
+- `<username>/landscape-server-client:24.04`
+- `<username>/landscape-server-client:25.10`
+- `<username>/landscape-server-client:latest` (24.04)
 
 To customize the client:
 ```bash

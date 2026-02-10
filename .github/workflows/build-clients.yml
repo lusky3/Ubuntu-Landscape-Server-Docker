@@ -23,7 +23,7 @@ jobs:
       security-events: write
     strategy:
       matrix:
-        version: ['12.04', '14.04', '16.04', '18.04', '24.04', '25.10']
+        version: ['12.04', '14.04', '16.04', '18.04', '20.04', '24.04', '25.10']
 
     steps:
       - uses: actions/checkout@v6
@@ -100,7 +100,7 @@ jobs:
           title: "🚀 Client images published"
           description: |
             **All Ubuntu versions published:**
-            - 12.04, 14.04, 16.04, 18.04, 24.04, 25.10
+            - 12.04, 14.04, 16.04, 18.04, 20.04, 24.04, 25.10
 
             **GHCR:** `ghcr.io/${{ github.repository }}-client:<version>`
             **Docker Hub:** `${{ secrets.DOCKERHUB_USERNAME }}/landscape-server-client:<version>`

@@ -28,7 +28,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Test docker-compose config
-        run: docker-compose config
+        run: docker compose config
 
   lint:
     runs-on: ubuntu-latest

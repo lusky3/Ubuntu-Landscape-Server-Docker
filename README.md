@@ -75,6 +75,21 @@ Choose ONE DNS validation method, or leave empty for webroot validation:
 - `SMTP_RELAY_PASSWORD` - SMTP password
 - `SMTP_RELAY_PORT` - SMTP port. Default: 2525
 
+### OIDC Authentication (Optional)
+
+Configure OpenID Connect authentication with your identity provider:
+
+- `OIDC_ISSUER` - OIDC issuer URL (e.g., https://accounts.google.com/)
+- `OIDC_CLIENT_ID` - Client ID from your OIDC provider
+- `OIDC_CLIENT_SECRET` - Client secret from your OIDC provider
+- `OIDC_LOGOUT_URL` - (Optional) Custom logout URL if not exposed by provider
+
+**Provider Setup:**
+- Set authorization redirect URI to: `https://your-domain/login/handle-openid`
+- Set logout redirect URL to: `https://your-domain/`
+
+**Note:** OIDC is used for authentication only. Users must still be invited and assigned roles within Landscape.
+
 ## Volumes
 
 - `acme-data` - Let's Encrypt certificates and acme.sh data

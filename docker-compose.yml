@@ -34,6 +34,12 @@ services:
       - SMTP_RELAY_USERNAME=${SMTP_RELAY_USERNAME:-}
       - SMTP_RELAY_PASSWORD=${SMTP_RELAY_PASSWORD:-}
       - SMTP_RELAY_PORT=${SMTP_RELAY_PORT:-2525}
+      
+      # OIDC configuration
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_LOGOUT_URL=${OIDC_LOGOUT_URL:-}
     volumes:
       - acme-data:/.acme.sh
       - landscape-data:/var/lib/landscape

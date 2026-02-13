@@ -33,7 +33,11 @@ USE_SMTP_RELAY=false \
 SMTP_RELAY_HOST="" \
 SMTP_RELAY_USERNAME="Username" \
 SMTP_RELAY_PASSWORD="Password" \
-SMTP_RELAY_PORT="2525"
+SMTP_RELAY_PORT="2525" \
+OIDC_ISSUER="" \
+OIDC_CLIENT_ID="" \
+OIDC_CLIENT_SECRET="" \
+OIDC_LOGOUT_URL=""
 
 # Final processes
 RUN rm /etc/init.d/syslog-ng && \

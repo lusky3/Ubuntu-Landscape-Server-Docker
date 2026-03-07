@@ -65,7 +65,7 @@ jobs:
             org.opencontainers.image.licenses=AGPL-3.0
 
       - name: Build and push client ${{ matrix.version }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: clients/Dockerfile.client.${{ matrix.version }}

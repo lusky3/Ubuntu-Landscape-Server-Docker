@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     volumes:
       - landscape-data:/var/lib/landscape
+      - postgres-data:/var/lib/postgresql
     environment:
       - LANDSCAPE_FQDN=${LANDSCAPE_FQDN:-localhost}
       - SKIP_HASH_ID_GENERATION=${SKIP_HASH_ID_GENERATION:-false}
@@ -33,3 +34,4 @@ services:
 
 volumes:
   landscape-data:
+  postgres-data:

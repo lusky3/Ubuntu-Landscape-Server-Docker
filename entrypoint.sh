@@ -62,6 +62,16 @@ EOF
   chmod 644 "$CERT_PATH"
 fi
 
+# Initialize PostgreSQL data directory if empty (first run with volume mount)
+PG_VERSION=$(ls /usr/lib/postgresql/ 2>/dev/null | head -1)
+PG_DATA="/var/lib/postgresql/${PG_VERSION}/main"
+if [ ! -d "$PG_DATA" ] || [ -z "$(ls -A "$PG_DATA" 2>/dev/null)" ]; then
+  echo "PostgreSQL data directory empty - initializing cluster..."
+  mkdir -p "$PG_DATA"
+  chown -R postgres:postgres /var/lib/postgresql
+  su postgres -c "/usr/lib/postgresql/${PG_VERSION}/bin/initdb -D $PG_DATA"
+fi
+
 echo "Starting PostgreSQL..."
 service postgresql start
 

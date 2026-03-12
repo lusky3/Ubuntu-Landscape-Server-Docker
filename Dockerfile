@@ -22,5 +22,7 @@ RUN apt-get update && \
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+VOLUME ["/var/lib/postgresql", "/var/lib/landscape"]
+
 EXPOSE 6554 443 80
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

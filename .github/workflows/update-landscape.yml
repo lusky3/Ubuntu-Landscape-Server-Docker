@@ -31,7 +31,7 @@ jobs:
             apt-get install -y --no-install-recommends software-properties-common >/dev/null 2>&1
             apt-add-repository -y ppa:landscape/self-hosted-24.04 >/dev/null 2>&1
             apt-get update -qq >/dev/null 2>&1
-            apt-cache policy landscape-server-quickstart | grep 'Candidate:' | awk '{print \\\$2}'
+            apt-cache policy landscape-server-quickstart | grep 'Candidate:' | awk '{print \$2}'
           ")
 
           # Trim whitespace and validate

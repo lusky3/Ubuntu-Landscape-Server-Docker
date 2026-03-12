@@ -31,7 +31,7 @@ jobs:
             apt-get install -y --no-install-recommends software-properties-common >/dev/null 2>&1
             apt-add-repository -y ppa:landscape/self-hosted-24.04 >/dev/null 2>&1
             apt-get update -qq >/dev/null 2>&1
-            apt-cache policy landscape-server-quickstart | grep 'Candidate:' | awk '{print \\\$2}'
+            apt-cache policy landscape-server-quickstart | grep 'Candidate:' | awk '{print \$2}'
           ")
 
           # Trim whitespace and validate
@@ -86,9 +86,3 @@ jobs:
             dependencies
             landscape
             auto-merge
-
-      - name: Enable auto-merge
-        if: steps.check.outputs.update_available == 'true' && steps.pr.outputs.pull-request-number
-        run: gh pr merge --auto --squash "${{ steps.pr.outputs.pull-request-number }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

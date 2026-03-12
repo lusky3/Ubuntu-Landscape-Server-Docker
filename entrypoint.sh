@@ -63,7 +63,7 @@ EOF
 fi
 
 # Initialize PostgreSQL data directory if empty (first run with volume mount)
-PG_VERSION=$(ls /usr/lib/postgresql/ 2>/dev/null | head -1)
+PG_VERSION=$(find /usr/lib/postgresql/ -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null | head -1)
 PG_DATA="/var/lib/postgresql/${PG_VERSION}/main"
 if [ ! -d "$PG_DATA" ] || [ -z "$(ls -A "$PG_DATA" 2>/dev/null)" ]; then
   echo "PostgreSQL data directory empty - initializing cluster..."

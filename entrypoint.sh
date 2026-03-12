@@ -157,8 +157,11 @@ else
   echo "Hash-id databases already generated."
 fi
 
+echo "Running database schema migration..."
+setup-landscape-server || true
+
 echo "Starting Landscape services..."
-lsctl start || true
+lsctl start 2>&1 | grep -v "unrecognized service" || true
 
 # Start package-search service (no init.d script, only systemd unit)
 echo "Starting landscape-package-search..."

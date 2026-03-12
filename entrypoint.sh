@@ -64,13 +64,32 @@ fi
 
 echo "Starting PostgreSQL..."
 service postgresql start
-sleep 5
+
+echo "Waiting for PostgreSQL to be ready..."
+for i in $(seq 1 30); do
+  if su postgres -c "pg_isready" >/dev/null 2>&1; then
+    echo "PostgreSQL is ready."
+    break
+  fi
+  echo "  Waiting... ($i/30)"
+  sleep 2
+done
 
 echo "Starting RabbitMQ..."
 rabbitmq-server -detached
 sleep 10
 
-if [ ! -f /var/lib/landscape/.quickstart_done ]; then
+# Check if database exists - quickstart flag may persist on volume but DB is lost on rebuild
+DB_EXISTS=false
+if su postgres -c "psql -lqt" 2>/dev/null | cut -d \| -f 1 | grep -qw landscape-standalone-main; then
+  DB_EXISTS=true
+fi
+
+if [ ! -f /var/lib/landscape/.quickstart_done ] || [ "$DB_EXISTS" = false ]; then
+  if [ "$DB_EXISTS" = false ] && [ -f /var/lib/landscape/.quickstart_done ]; then
+    echo "Database missing after container rebuild - re-running quickstart..."
+    rm -f /var/lib/landscape/.quickstart_done
+  fi
   echo "Running landscape-quickstart..."
   landscape-quickstart --skip-ssl || true
   
@@ -158,7 +177,11 @@ else
 fi
 
 echo "Running database schema migration..."
-setup-landscape-server || true
+if setup-landscape-server 2>&1; then
+  echo "Schema migration completed successfully."
+else
+  echo "WARNING: Schema migration returned non-zero exit code. Continuing anyway..."
+fi
 
 echo "Starting Landscape services..."
 lsctl start 2>&1 | grep -v "unrecognized service" || true

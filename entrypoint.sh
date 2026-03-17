@@ -170,17 +170,27 @@ echo "Starting rsyslog..."
 rsyslogd || true
 sleep 2
 
-# Generate hash-id databases for package reporting
+# Import Ubuntu archive GPG keys so hash-id generation can verify package indices
+echo "Importing Ubuntu archive GPG keys..."
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys \
+  40976EAF437D05B5 3B4FE6ACC0B21F32 871920D1991BC93C 2>/dev/null || true
+
+# Generate hash-id databases for package reporting (run in background to avoid blocking startup)
 if [ ! -f /var/lib/landscape/.hash_id_done ]; then
   if [ "${SKIP_HASH_ID_GENERATION:-false}" = "true" ]; then
     echo "Skipping hash-id database generation (SKIP_HASH_ID_GENERATION=true)"
     touch /var/lib/landscape/.hash_id_done
   else
-    echo "Generating hash-id databases (this may take a few minutes)..."
+    echo "Generating hash-id databases in background (this may take a few minutes)..."
     mkdir -p /var/lib/landscape/hash-id-databases
-    python3 /opt/canonical/landscape/hash-id-databases \
-      --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf || true
-    touch /var/lib/landscape/.hash_id_done
+    (
+      python3 /opt/canonical/landscape/hash-id-databases \
+        --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf && \
+      touch /var/lib/landscape/.hash_id_done && \
+      echo "Hash-id database generation completed successfully."
+    ) &
+    HASH_ID_PID=$!
+    echo "Hash-id generation running in background (PID: $HASH_ID_PID)"
   fi
 else
   echo "Hash-id databases already generated."

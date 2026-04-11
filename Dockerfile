@@ -8,14 +8,11 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      sudo \
-      ca-certificates \
-      software-properties-common \
-      curl \
-      openssl \
-      gnupg && \
-    apt-add-repository -y ppa:landscape/self-hosted-24.04 && \
+    apt-get install -y --no-install-recommends \n      sudo \n      ca-certificates \n      software-properties-common \n      curl \n      openssl \n      gnupg && \
+    apt-add-repository -y --no-update ppa:landscape/self-hosted-24.04 || \n    (echo "deb http://ppa.launchpad.net/landscape/self-hosted-24.04/ubuntu noble main" > /etc/apt/sources.list.d/landscape-ubuntu-self-hosted-24-04-noble.list && \
+     gpg --keyserver keyserver.ubuntu.com --recv-keys E1DD270288B4E6030699E45FA1715D88763E0DA9 2>/dev/null || true && \
+     gpg --export E1DD270288B4E6030699E45FA1715D88763E0DA9 | apt-key add - 2>/dev/null || true) && \
+    apt-get update && \
     apt-get install -y --no-install-recommends landscape-server-quickstart && \
     rm -f /usr/sbin/policy-rc.d && \
     rm -rf /var/lib/apt/lists/*

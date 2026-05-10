@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:
 
 LABEL org.opencontainers.image.title="Ubuntu Landscape Server"
 LABEL org.opencontainers.image.description="Ubuntu Landscape Server for systems management - self-hosted edition with web interface for managing Ubuntu systems"

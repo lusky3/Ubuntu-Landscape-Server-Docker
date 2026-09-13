@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:
 
 LABEL org.opencontainers.image.title="Ubuntu Landscape Client"
 LABEL org.opencontainers.image.description="Ubuntu Landscape Client for connecting Ubuntu systems to Landscape Server for centralized management"

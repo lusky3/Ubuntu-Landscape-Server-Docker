@@ -5,6 +5,10 @@ on:
     - cron: '0 0 * * 0'  # Weekly on Sunday
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   check-updates:
     runs-on: ubuntu-latest
@@ -29,7 +33,7 @@ jobs:
         run: |
           sed -i \
             "s|FROM ubuntu:${{ steps.check.outputs.current }}|FROM ubuntu:${{ steps.check.outputs.latest }}|g" \
-            Dockerfile clients/Dockerfile.client.24.04
+            Dockerfile
 
       - name: Create Pull Request
         if: steps.check.outputs.update_available == 'true'

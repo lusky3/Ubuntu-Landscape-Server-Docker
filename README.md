@@ -12,8 +12,8 @@ All-in-one Docker container for Ubuntu Landscape Server with automatic SSL certi
 
 Pull from Docker Hub:
 ```bash
-docker pull <username>/landscape-server:latest
-docker pull <username>/landscape-server-client:latest
+docker pull <your-dockerhub-username>/landscape-server:latest
+docker pull <your-dockerhub-username>/landscape-server-client:latest
 ```
 
 Or use GitHub Container Registry:
@@ -24,27 +24,22 @@ docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker/landscape-client:lates
 
 ### Building Locally
 
-1. Copy the environment template:
+1. Copy the environment template (optional - only needed for Let's Encrypt DNS
+   authorization, see below):
 ```bash
 cp .env.example .env.local
 ```
 
-2. Edit `.env.local` and add your Ubuntu Pro token:
-```
-UBUNTU_PRO_TOKEN=your_actual_token_here
-```
-
-3. Build and start:
+2. Build and start:
 ```bash
 docker compose up -d
 ```
 
-4. Access Landscape at https://localhost
+3. Access Landscape at https://localhost
 
 ## Prerequisites
 
 - Docker and Docker Compose
-- Ubuntu Pro token (get free token at https://ubuntu.com/pro)
 
 ## SSL Certificates
 
@@ -92,20 +87,23 @@ See [acme.sh DNS API docs](https://github.com/acmesh-official/acme.sh/wiki/dnsap
 
 First startup takes 2-3 minutes:
 1. Generates SSL certificate
-2. Attaches Ubuntu Pro subscription
-3. Installs Landscape Server
-4. Configures PostgreSQL and RabbitMQ
-5. Initializes databases
+2. Installs Landscape Server
+3. Configures PostgreSQL and RabbitMQ
+4. Initializes databases
 
 ## Create Admin Account
 
 On first access, you'll see a signup form to create the admin account.
 
-Alternatively, a default admin account is created automatically:
-- Email: `admin@landscape.local`
-- Password: `admin`
-
-**Change the password immediately after first login!**
+Alternatively, a default admin account is created automatically on first boot:
+- Email: `admin@landscape.local` (override with the `ADMIN_EMAIL` env var)
+- Password: a randomly generated password, written to
+  `/var/lib/landscape/admin-credentials.txt` inside the container
+  (root-readable only). Retrieve it with:
+  ```bash
+  docker exec landscape-server cat /var/lib/landscape/admin-credentials.txt
+  ```
+  Or set your own via the `ADMIN_PASSWORD` env var before first boot.
 
 ## Optional: Test Client
 
@@ -134,13 +132,15 @@ To use a specific version, modify `compose.yml`:
 landscape-client:
   build:
     context: .
-    dockerfile: clients/Dockerfile.client.18.04  # Change version here
+    dockerfile: clients/Dockerfile.client
+    args:
+      UBUNTU_VERSION: "18.04"  # Change version here
 ```
 
 Or pull pre-built images:
 ```bash
 docker pull ghcr.io/lusky3/ubuntu-landscape-server-docker-client:18.04
-docker pull <username>/landscape-server-client:18.04
+docker pull <your-dockerhub-username>/landscape-server-client:18.04
 ```
 
 #### Available Pre-built Images
@@ -157,15 +157,15 @@ docker pull <username>/landscape-server-client:18.04
 - `ghcr.io/lusky3/ubuntu-landscape-server-docker-client:latest` (24.04)
 
 **Docker Hub:**
-- `<username>/landscape-server-client:12.04`
-- `<username>/landscape-server-client:14.04`
-- `<username>/landscape-server-client:16.04`
-- `<username>/landscape-server-client:18.04`
-- `<username>/landscape-server-client:20.04`
-- `<username>/landscape-server-client:22.04`
-- `<username>/landscape-server-client:24.04`
-- `<username>/landscape-server-client:25.10`
-- `<username>/landscape-server-client:latest` (24.04)
+- `<your-dockerhub-username>/landscape-server-client:12.04`
+- `<your-dockerhub-username>/landscape-server-client:14.04`
+- `<your-dockerhub-username>/landscape-server-client:16.04`
+- `<your-dockerhub-username>/landscape-server-client:18.04`
+- `<your-dockerhub-username>/landscape-server-client:20.04`
+- `<your-dockerhub-username>/landscape-server-client:22.04`
+- `<your-dockerhub-username>/landscape-server-client:24.04`
+- `<your-dockerhub-username>/landscape-server-client:25.10`
+- `<your-dockerhub-username>/landscape-server-client:latest` (24.04)
 
 To customize the client:
 ```bash
@@ -174,6 +174,8 @@ LANDSCAPE_URL=https://landscape-server
 ACCOUNT_NAME=standalone
 COMPUTER_TITLE=My Test Client
 REGISTRATION_KEY=optional_key  # If required by account
+SCRIPT_USERS=ALL  # Opt-in only: allows the server to run scripts on this client
+                  # as any user. Omitted (safe) by default.
 ```
 
 ## Logs
@@ -200,7 +202,7 @@ This project includes a comprehensive automated CI/CD pipeline:
 
 ### Publishing
 Images are automatically built and published to both registries on every push to main:
-- **Docker Hub**: `<username>/landscape-server:main` and `<username>/landscape-server-client:main`
+- **Docker Hub**: `<your-dockerhub-username>/landscape-server:main` and `<your-dockerhub-username>/landscape-server-client:main`
 - **GitHub Container Registry**: `ghcr.io/lusky3/ubuntu-landscape-server-docker/landscape:main`
 
 ### Discord Notifications

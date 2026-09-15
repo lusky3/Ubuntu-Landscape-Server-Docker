@@ -44,4 +44,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 VOLUME ["/var/lib/postgresql", "/var/lib/landscape"]
 
 EXPOSE 6554 443 80
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=20 \
+  CMD ["sh", "-c", "curl -fsk https://localhost/ping || exit 1"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

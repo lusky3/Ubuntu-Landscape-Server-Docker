@@ -24,5 +24,7 @@ RUN if [ "$UBUNTU_VERSION" = "12.04" ]; then \
 COPY client-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["sh", "-c", "pgrep -f landscape-client || exit 1"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["sleep", "infinity"]

@@ -1,3 +1,5 @@
+# NOTE: this display name is depended on by the workflow_run trigger in
+# discord-notifications.yml. If you rename it, update that list too.
 name: CI
 
 on:

@@ -1,4 +1,6 @@
 ---
+# NOTE: this display name is depended on by the workflow_run trigger in
+# discord-notifications.yml. If you rename it, update that list too.
 name: Build and Publish Client Images
 
 'on':
@@ -64,18 +66,43 @@ jobs:
             org.opencontainers.image.source=https://github.com/lusky3/Ubuntu-Landscape-Server-Docker
             org.opencontainers.image.licenses=AGPL-3.0
 
-      - name: Build and push client ${{ matrix.version }}
+      - name: Build client ${{ matrix.version }} (no push yet)
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: clients/Dockerfile.client.${{ matrix.version }}
+          file: clients/Dockerfile.client
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.version }}
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=client-${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=client-${{ matrix.version }}
+
+      - name: Run Trivy vulnerability gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Push client ${{ matrix.version }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: clients/Dockerfile.client
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=client-${{ matrix.version }}
           cache-to: type=gha,mode=max,scope=client-${{ matrix.version }}
 
-      - name: Run Trivy security scan
+      - name: Run Trivy scan for GitHub Security tab
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}

@@ -31,8 +31,11 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: clients/Dockerfile.client.${{ matrix.version }}
+          file: clients/Dockerfile.client
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.version }}
           push: false
+          load: true
           tags: landscape-client:${{ matrix.version }}
           cache-from: type=gha,scope=client-${{ matrix.version }}
           cache-to: type=gha,mode=max,scope=client-${{ matrix.version }}

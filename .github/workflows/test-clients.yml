@@ -35,6 +35,7 @@ jobs:
           build-args: |
             UBUNTU_VERSION=${{ matrix.version }}
           push: false
+          load: true
           tags: landscape-client:${{ matrix.version }}
           cache-from: type=gha,scope=client-${{ matrix.version }}
           cache-to: type=gha,mode=max,scope=client-${{ matrix.version }}

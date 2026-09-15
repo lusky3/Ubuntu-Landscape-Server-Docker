@@ -41,11 +41,16 @@ url = $LANDSCAPE_URL/message-system
 ping_url = $LANDSCAPE_URL/ping
 account_name = $ACCOUNT_NAME
 computer_title = $COMPUTER_TITLE
-script_users = ALL
 tags = container
 log_level = info
 ssl_public_key = /tmp/landscape-server.pem
 EOF
+
+  # Remote script execution is disabled by default. Set SCRIPT_USERS (e.g. "ALL"
+  # or a comma-separated user list) to explicitly opt in.
+  if [ -n "${SCRIPT_USERS:-}" ]; then
+    echo "script_users = $SCRIPT_USERS" >> /etc/landscape/client.conf
+  fi
 
   # Add registration key if provided
   if [ -n "$REGISTRATION_KEY" ]; then
@@ -57,6 +62,11 @@ fi
 
 echo "Starting Landscape client..."
 landscape-client &
+CLIENT_PID=$!
 
-# Keep container running
-tail -f /var/log/landscape/sysinfo.log /var/log/landscape/watchdog.log 2>/dev/null || sleep infinity
+# Tail logs for visibility; the container's lifecycle is tied to the actual
+# client process below so a crash propagates a non-zero exit instead of the
+# container idling forever.
+( tail -F /var/log/landscape/sysinfo.log /var/log/landscape/watchdog.log 2>/dev/null & )
+
+wait "$CLIENT_PID"

@@ -17,15 +17,14 @@ if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
     # Strip dns_ prefix if provided
     PROVIDER="${ACME_DNS_PROVIDER#dns_}"
     echo "Attempting Let's Encrypt with DNS authorization (${PROVIDER})..."
-    curl -s https://get.acme.sh | sh -s
-    
+
     # Export all ACME_* env vars for the DNS provider
     for var in $(env | grep '^ACME_' | cut -d= -f1); do
       [ "$var" != "ACME_DNS_PROVIDER" ] && export "${var?}"
     done
-    
-    if ~/.acme.sh/acme.sh --issue --dns "dns_${PROVIDER}" -d "$FQDN" --server letsencrypt 2>&1; then
-      ~/.acme.sh/acme.sh --install-cert -d "$FQDN" --cert-file "$CERT_PATH" --key-file "$KEY_PATH" --fullchain-file /etc/ssl/certs/landscape-fullchain.crt
+
+    if /opt/acme.sh/acme.sh --issue --dns "dns_${PROVIDER}" -d "$FQDN" --server letsencrypt --home /opt/acme.sh 2>&1; then
+      /opt/acme.sh/acme.sh --install-cert -d "$FQDN" --cert-file "$CERT_PATH" --key-file "$KEY_PATH" --fullchain-file /etc/ssl/certs/landscape-fullchain.crt --home /opt/acme.sh
       echo "Let's Encrypt certificate installed"
     else
       echo "ERROR: Let's Encrypt failed (invalid provider '${PROVIDER}' or missing credentials)"
@@ -101,7 +100,10 @@ if [ ! -f /var/lib/landscape/.quickstart_done ] || [ "$DB_EXISTS" = false ]; the
     rm -f /var/lib/landscape/.quickstart_done
   fi
   echo "Running landscape-quickstart..."
-  landscape-quickstart --skip-ssl || true
+  if ! landscape-quickstart --skip-ssl; then
+    echo "ERROR: landscape-quickstart failed. Aborting startup." >&2
+    exit 1
+  fi
   
   # Fix Apache vhost rewrite - landscape-quickstart generates broken config
   sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' /etc/apache2/sites-available/localhost.conf
@@ -147,19 +149,36 @@ EOF
   
   # Create default admin account
   echo "Creating default admin account..."
-  /opt/canonical/landscape/bootstrap-account \
-    --admin_email admin@landscape.local \
-    --admin_password admin \
+  ADMIN_EMAIL="${ADMIN_EMAIL:-admin@landscape.local}"
+  if [ -n "${ADMIN_PASSWORD:-}" ]; then
+    echo "Using admin password from ADMIN_PASSWORD environment variable."
+  else
+    ADMIN_PASSWORD=$(openssl rand -base64 24)
+    echo "Generated a random admin password (see /var/lib/landscape/admin-credentials.txt)."
+  fi
+  if ! /opt/canonical/landscape/bootstrap-account \
+    --admin_email "$ADMIN_EMAIL" \
+    --admin_password "$ADMIN_PASSWORD" \
     --admin_name "Admin User" \
-    --root_url https://localhost || true
-  
+    --root_url https://localhost; then
+    echo "ERROR: bootstrap-account failed to create the admin user. Aborting startup." >&2
+    exit 1
+  fi
+  cat > /var/lib/landscape/admin-credentials.txt <<CREDSEOF
+email: $ADMIN_EMAIL
+password: $ADMIN_PASSWORD
+CREDSEOF
+  chmod 600 /var/lib/landscape/admin-credentials.txt
+  unset ADMIN_PASSWORD
+  echo "Admin credentials written to /var/lib/landscape/admin-credentials.txt (root-only)."
+
   # Generate registration key for pre-enrollment
   echo "Generating registration key..."
   REGISTRATION_KEY=$(openssl rand -hex 16)
   echo "$REGISTRATION_KEY" > /var/lib/landscape/registration-key.txt
-  chmod 644 /var/lib/landscape/registration-key.txt
+  chmod 640 /var/lib/landscape/registration-key.txt
   echo "Registration key saved to /var/lib/landscape/registration-key.txt"
-  
+
   touch /var/lib/landscape/.quickstart_done
 else
   echo "Skipping landscape-quickstart (already done)."
@@ -172,8 +191,11 @@ sleep 2
 
 # Import Ubuntu archive GPG keys so hash-id generation can verify package indices
 echo "Importing Ubuntu archive GPG keys..."
-apt-key adv --keyserver keyserver.ubuntu.com --recv-keys \
-  40976EAF437D05B5 3B4FE6ACC0B21F32 871920D1991BC93C 2>/dev/null || true
+if ! gpg --no-default-keyring --keyring /etc/apt/trusted.gpg.d/ubuntu-archive-runtime.gpg \
+    --keyserver keyserver.ubuntu.com --recv-keys \
+    40976EAF437D05B5 3B4FE6ACC0B21F32 871920D1991BC93C; then
+  echo "WARNING: failed to import Ubuntu archive GPG keys; hash-id generation may fail to verify package indices." >&2
+fi
 
 # Generate hash-id databases for package reporting (run in background to avoid blocking startup)
 if [ ! -f /var/lib/landscape/.hash_id_done ]; then
@@ -200,11 +222,22 @@ echo "Running database schema migration..."
 if setup-landscape-server 2>&1; then
   echo "Schema migration completed successfully."
 else
-  echo "WARNING: Schema migration returned non-zero exit code. Continuing anyway..."
+  echo "ERROR: Schema migration failed. Aborting startup." >&2
+  exit 1
 fi
 
 echo "Starting Landscape services..."
-lsctl start 2>&1 | grep -v "unrecognized service" || true
+# lsctl always exits non-zero in this container because landscape-package-search,
+# landscape-hostagent-messenger, landscape-hostagent-consumer and
+# landscape-secrets-service have no init.d script here (systemd-only units not
+# applicable to this standalone image) - that's expected, so its exit code alone
+# can't signal a real failure. Check the filtered output for actual failures instead.
+LSCTL_OUTPUT=$(lsctl start 2>&1 | grep -v "unrecognized service" || true)
+echo "$LSCTL_OUTPUT"
+if echo "$LSCTL_OUTPUT" | grep -q "fail!"; then
+  echo "ERROR: one or more Landscape services failed to start." >&2
+  exit 1
+fi
 
 # Start package-search service (no init.d script, only systemd unit)
 echo "Starting landscape-package-search..."

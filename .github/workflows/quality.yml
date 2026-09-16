@@ -1,4 +1,6 @@
 ---
+# NOTE: this display name is depended on by the workflow_run trigger in
+# discord-notifications.yml. If you rename it, update that list too.
 name: Code Quality
 
 'on':
@@ -24,14 +26,7 @@ jobs:
       matrix:
         dockerfile:
           - Dockerfile
-          - clients/Dockerfile.client.12.04
-          - clients/Dockerfile.client.14.04
-          - clients/Dockerfile.client.16.04
-          - clients/Dockerfile.client.18.04
-          - clients/Dockerfile.client.20.04
-          - clients/Dockerfile.client.22.04
-          - clients/Dockerfile.client.24.04
-          - clients/Dockerfile.client.25.10
+          - clients/Dockerfile.client
     steps:
       - uses: actions/checkout@v6
 
@@ -40,7 +35,6 @@ jobs:
         with:
           dockerfile: ${{ matrix.dockerfile }}
           failure-threshold: error
-          ignore: DL3008
 
   yaml-lint:
     runs-on: ubuntu-latest

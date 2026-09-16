@@ -1,4 +1,5 @@
-FROM ubuntu:20.04
+ARG UBUNTU_VERSION
+FROM ubuntu:${UBUNTU_VERSION}
 
 LABEL org.opencontainers.image.title="Ubuntu Landscape Client"
 LABEL org.opencontainers.image.description="Ubuntu Landscape Client for connecting Ubuntu systems to Landscape Server for centralized management"
@@ -6,9 +7,15 @@ LABEL org.opencontainers.image.source="https://github.com/lusky3/Ubuntu-Landscap
 LABEL org.opencontainers.image.url="https://ubuntu.com/landscape"
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
+ARG UBUNTU_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
+# hadolint ignore=DL3008
+RUN if [ "$UBUNTU_VERSION" = "12.04" ]; then \
+      # 12.04 (Precise) is EOL and was moved off the primary archive mirrors.
+      sed -i -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' /etc/apt/sources.list; \
+    fi && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
       landscape-client \
       ca-certificates && \
@@ -17,5 +24,7 @@ RUN apt-get update && \
 COPY client-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["sh", "-c", "pgrep -f landscape-client || exit 1"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["sleep", "infinity"]

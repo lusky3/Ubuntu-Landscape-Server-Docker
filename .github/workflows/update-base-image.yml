@@ -19,11 +19,23 @@ jobs:
         id: check
         run: |
           CURRENT=$(grep "^FROM ubuntu:" Dockerfile | head -1 | cut -d: -f2)
-          LATEST=$(curl -s \
-            https://registry.hub.docker.com/v2/repositories/library/ubuntu/tags | \
-            jq -r '.results[] | select(.name | test("^24\\.04")) | .name' | head -1)
+
+          # Query the specific 24.04 tag directly rather than paginating all tags.
+          # ubuntu:24.04 is intentionally pinned — Landscape Server quickstart mode
+          # is unsupported on Ubuntu 26.04 per Canonical docs.
+          LATEST=$(curl -sf \
+            "https://registry.hub.docker.com/v2/repositories/library/ubuntu/tags/24.04" | \
+            jq -r '.name // empty')
+
+          # Bail out if the API call failed or returned nothing — never commit a blank tag.
+          if [ -z "$LATEST" ]; then
+            echo "Could not determine latest Ubuntu 24.04 tag — skipping update" >&2
+            exit 0
+          fi
+
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
+
           if [ "$CURRENT" != "$LATEST" ]; then
             echo "update_available=true" >> $GITHUB_OUTPUT
           fi
@@ -46,5 +58,8 @@ jobs:
 
             - Current: `${{ steps.check.outputs.current }}`
             - Latest: `${{ steps.check.outputs.latest }}`
+
+            > **Note:** ubuntu:24.04 is intentionally pinned. Landscape Server quickstart mode
+            > is unsupported on Ubuntu 26.04 per [Canonical docs](https://ubuntu.com/landscape/docs/how-to-guides/landscape-installation-and-set-up/quickstart-installation/).
           branch: update-ubuntu-base
           delete-branch: true

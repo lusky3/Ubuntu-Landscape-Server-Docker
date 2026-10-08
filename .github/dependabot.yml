@@ -19,3 +19,8 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    ignore:
+      # The Landscape PPA / quickstart only supports the pinned Ubuntu LTS
+      # series (a 25.10 base fails: the PPA has no "questing" release), and
+      # update-base-image.yml already tracks point releases of that tag.
+      - dependency-name: "ubuntu"

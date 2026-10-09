@@ -47,7 +47,7 @@ The container automatically generates SSL certificates on first boot:
 
 **Self-Signed (Default)**
 - Automatically generated if no DNS provider is configured
-- Valid for 1 year
+- Valid for 10 years
 - Browser will show security warning (accept to proceed)
 
 **Let's Encrypt with DNS Authorization (Optional)**
@@ -77,6 +77,18 @@ ACME_GD_Secret=your_secret
 ```
 
 See [acme.sh DNS API docs](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) for all supported providers.
+
+How it works:
+- Credentials are handed to [acme.sh](https://github.com/acmesh-official/acme.sh) with the `ACME_` prefix
+  removed (`ACME_CF_Token` becomes `CF_Token`), so use the variable names from the acme.sh DNS API docs,
+  each prefixed with `ACME_`.
+- `ACME_SERVER` selects the certificate authority (default `letsencrypt`). Set it to `letsencrypt_test`
+  to try your setup against Let's Encrypt staging first; staging certificates are not trusted by browsers,
+  but they don't count against production rate limits.
+- If issuance fails, the error is logged and the container falls back to a self-signed certificate.
+- The certificate is requested when a container is first created and is **not renewed automatically**.
+  Let's Encrypt certificates last 90 days, so recreate the container before then
+  (`docker compose up -d --force-recreate landscape`). Each re-issue counts toward Let's Encrypt rate limits.
 
 ## Ports
 

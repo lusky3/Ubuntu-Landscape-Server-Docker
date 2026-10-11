@@ -1,0 +1,37 @@
+name: App Token Probe (temporary)
+
+on:
+  push:
+    branches: [probe/app-token]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate LuskTech-Neko app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Probe what the token can do
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "app slug: ${{ steps.app-token.outputs.app-slug }}"
+          echo "installation id: ${{ steps.app-token.outputs.installation-id }}"
+          echo "--- repositories this installation can access ---"
+          gh api /installation/repositories --jq '.repositories[].full_name'
+          echo "--- write probe: open a draft PR (needs pull requests: write) ---"
+          if gh pr create --repo "$REPO" --base main --head probe/app-token --draft \
+               --title "[temp] LuskTech-Neko token probe - do not merge" \
+               --body "Temporary probe PR created by the GitHub App token; will be closed immediately."; then
+            echo "RESULT: PR_CREATE_OK"
+          else
+            echo "RESULT: PR_CREATE_DENIED"
+          fi

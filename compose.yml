@@ -7,6 +7,9 @@ services:
       - "443:443"
     hostname: landscape-server
     restart: unless-stopped
+    env_file:
+      - path: .env.local
+        required: false
     volumes:
       - landscape-data:/var/lib/landscape
       - postgres-data:/var/lib/postgresql
@@ -23,7 +26,9 @@ services:
   landscape-client:
     build:
       context: .
-      dockerfile: clients/Dockerfile.client.24.04
+      dockerfile: clients/Dockerfile.client
+      args:
+        UBUNTU_VERSION: "24.04"
     container_name: landscape-client
     hostname: landscape-client
     environment:

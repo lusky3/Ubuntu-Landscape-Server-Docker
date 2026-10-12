@@ -1,9 +1,14 @@
+# NOTE: this display name is depended on by the workflow_run trigger in
+# discord-notifications.yml. If you rename it, update that list too.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test-server:
@@ -113,11 +118,14 @@ jobs:
 
   security-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v7
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: 'config'
           scan-ref: '.'
@@ -125,6 +133,6 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v4.38.0
+        uses: github/codeql-action/upload-sarif@v4.38.3
         with:
           sarif_file: 'trivy-results.sarif'

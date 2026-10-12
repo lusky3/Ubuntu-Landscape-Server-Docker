@@ -6,36 +6,19 @@ echo "==== Landscape entrypoint starting ===="
 FQDN="${LANDSCAPE_FQDN:-landscape-server}"
 CERT_PATH="/etc/ssl/certs/landscape_server.pem"
 KEY_PATH="/etc/ssl/private/landscape_server.key"
+# Landscape's Apache vhost serves this file as SSLCertificateChainFile
+# (LANDSCAPE_CUSTOM_SSL_CA in Canonical's code), and mod_ssl uses it instead of
+# any extra certificates in CERT_PATH, so ACME intermediates must be installed here.
+CA_PATH="/etc/ssl/certs/landscape_server_ca.crt"
+ACME_HOME="/opt/acme.sh"
+# ACME CA to use; set ACME_SERVER=letsencrypt_test for Let's Encrypt staging.
+ACME_SERVER="${ACME_SERVER:-letsencrypt}"
 
 echo "Using FQDN: ${FQDN}"
 
-# Certificate generation
-if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
-  echo "Generating SSL certificate..."
-  
-  if [ -n "${ACME_DNS_PROVIDER:-}" ]; then
-    # Strip dns_ prefix if provided
-    PROVIDER="${ACME_DNS_PROVIDER#dns_}"
-    echo "Attempting Let's Encrypt with DNS authorization (${PROVIDER})..."
-
-    # Export all ACME_* env vars for the DNS provider
-    for var in $(env | grep '^ACME_' | cut -d= -f1); do
-      [ "$var" != "ACME_DNS_PROVIDER" ] && export "${var?}"
-    done
-
-    if /opt/acme.sh/acme.sh --issue --dns "dns_${PROVIDER}" -d "$FQDN" --server letsencrypt --home /opt/acme.sh 2>&1; then
-      /opt/acme.sh/acme.sh --install-cert -d "$FQDN" --cert-file "$CERT_PATH" --key-file "$KEY_PATH" --fullchain-file /etc/ssl/certs/landscape-fullchain.crt --home /opt/acme.sh
-      echo "Let's Encrypt certificate installed"
-    else
-      echo "ERROR: Let's Encrypt failed (invalid provider '${PROVIDER}' or missing credentials)"
-      echo "Falling back to self-signed certificate"
-      ACME_DNS_PROVIDER=""
-    fi
-  fi
-  
-  if [ -z "${ACME_DNS_PROVIDER:-}" ]; then
-    echo "Generating self-signed certificate..."
-    cat > /tmp/san.cnf <<EOF
+generate_self_signed_cert() {
+  echo "Generating self-signed certificate..."
+  cat > /tmp/san.cnf <<EOF
 [req]
 distinguished_name = req_distinguished_name
 x509_extensions = v3_req
@@ -52,14 +35,66 @@ DNS.1 = $FQDN
 DNS.2 = landscape-server
 DNS.3 = localhost
 EOF
-    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-      -keyout "$KEY_PATH" -out "$CERT_PATH" \
-      -config /tmp/san.cnf -extensions v3_req
-  fi
-  
+  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout "$KEY_PATH" -out "$CERT_PATH" \
+    -config /tmp/san.cnf -extensions v3_req
   chmod 600 "$KEY_PATH"
   chmod 644 "$CERT_PATH"
+}
+
+# True if acme.sh already holds an issued certificate for $FQDN.
+acme_cert_exists() {
+  [ -s "${ACME_HOME}/${FQDN}/fullchain.cer" ] || [ -s "${ACME_HOME}/${FQDN}_ecc/fullchain.cer" ]
+}
+
+# Copy the acme.sh-managed certificate to where Apache expects it: the leaf in
+# CERT_PATH and the intermediate chain in CA_PATH so clients can build the chain.
+install_acme_cert() {
+  "${ACME_HOME}/acme.sh" --home "$ACME_HOME" --install-cert -d "$FQDN" \
+    --key-file "$KEY_PATH" --cert-file "$CERT_PATH" --ca-file "$CA_PATH"
+  chmod 600 "$KEY_PATH"
+  chmod 644 "$CERT_PATH" "$CA_PATH"
+}
+
+# Certificate generation
+if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
+  echo "Generating SSL certificate..."
+  ACME_OK=false
+
+  if [ -n "${ACME_DNS_PROVIDER:-}" ]; then
+    # Strip dns_ prefix if provided
+    PROVIDER="${ACME_DNS_PROVIDER#dns_}"
+    echo "Attempting ACME certificate (${ACME_SERVER}) with DNS authorization (${PROVIDER})..."
+
+    # acme.sh DNS plugins read provider-native names (CF_Token, AWS_ACCESS_KEY_ID,
+    # GD_Key, ...). They are supplied here as ACME_<name>, so strip the prefix.
+    for var in $(compgen -e | grep '^ACME_' || true); do
+      case "$var" in ACME_DNS_PROVIDER|ACME_SERVER) continue ;; esac
+      export "${var#ACME_}=${!var}"
+    done
+
+    # acme.sh exits 2 when a still-valid certificate already exists; that is fine.
+    acme_rc=0
+    "${ACME_HOME}/acme.sh" --home "$ACME_HOME" --issue --dns "dns_${PROVIDER}" \
+      -d "$FQDN" --server "$ACME_SERVER" 2>&1 || acme_rc=$?
+    if { [ "$acme_rc" -eq 0 ] || [ "$acme_rc" -eq 2 ]; } && install_acme_cert; then
+      echo "ACME certificate installed"
+      ACME_OK=true
+    else
+      echo "ERROR: ACME issuance failed (invalid provider '${PROVIDER}', missing credentials, or DNS/CA error)"
+      echo "Falling back to self-signed certificate"
+    fi
+  fi
+
+  if [ "$ACME_OK" != true ]; then
+    generate_self_signed_cert
+  fi
 fi
+
+# landscape-quickstart names the Apache vhost after the CN of the certificate
+# above (<CN>.conf), so derive the path instead of assuming "localhost".
+CERT_CN=$(openssl x509 -in "$CERT_PATH" -noout -subject -nameopt multiline | sed -n 's/^ *commonName *= *//p')
+VHOST_CONF="/etc/apache2/sites-available/${CERT_CN:-$FQDN}.conf"
 
 # Initialize PostgreSQL data directory if empty (first run with volume mount)
 PG_VERSION=$(find /usr/lib/postgresql/ -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null | head -1)
@@ -106,12 +141,12 @@ if [ ! -f /var/lib/landscape/.quickstart_done ] || [ "$DB_EXISTS" = false ]; the
   fi
   
   # Fix Apache vhost rewrite - landscape-quickstart generates broken config
-  sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' /etc/apache2/sites-available/localhost.conf
-  sed -i 's|https://%{HTTP_HOST}:443/|https://%{HTTP_HOST}/|g' /etc/apache2/sites-available/localhost.conf
+  sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' "$VHOST_CONF"
+  sed -i 's|https://%{HTTP_HOST}:443/|https://%{HTTP_HOST}/|g' "$VHOST_CONF"
   
   # Fix 1: Add /ping rewrite to HTTPS VirtualHost
   echo "Adding /ping endpoint to HTTPS VirtualHost..."
-  sed -i '/^    RewriteEngine On$/a\    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]' /etc/apache2/sites-available/localhost.conf
+  sed -i '/^    RewriteEngine On$/a\    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]' "$VHOST_CONF"
   
   # Add /ping rewrite to HTTPS VirtualHost (after RewriteEngine On in the 443 vhost)
   echo "Adding /ping endpoint to HTTPS VirtualHost..."
@@ -120,33 +155,18 @@ if [ ! -f /var/lib/landscape/.quickstart_done ] || [ "$DB_EXISTS" = false ]; the
 \
     # Landscape Ping Server on port 8070\
     RewriteRule ^/ping$ http://localhost:8070/ping [P,L]
-  }' /etc/apache2/sites-available/localhost.conf
+  }' "$VHOST_CONF"
   
-  # Regenerate certificate with correct SAN BEFORE starting services
-  echo "Regenerating SSL certificate with SAN..."
-  cat > /tmp/san.cnf <<EOF
-[req]
-distinguished_name = req_distinguished_name
-x509_extensions = v3_req
-prompt = no
+  # Make sure the intended certificate is in place BEFORE starting services:
+  # the ACME-issued one if we have it, otherwise a self-signed one with SANs.
+  if acme_cert_exists; then
+    echo "Re-installing ACME certificate..."
+    install_acme_cert
+  else
+    echo "Regenerating SSL certificate with SAN..."
+    generate_self_signed_cert
+  fi
 
-[req_distinguished_name]
-CN = $FQDN
-
-[v3_req]
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = $FQDN
-DNS.2 = landscape-server
-DNS.3 = localhost
-EOF
-  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-    -keyout "$KEY_PATH" -out "$CERT_PATH" \
-    -config /tmp/san.cnf -extensions v3_req
-  chmod 600 "$KEY_PATH"
-  chmod 644 "$CERT_PATH"
-  
   # Create default admin account
   echo "Creating default admin account..."
   ADMIN_EMAIL="${ADMIN_EMAIL:-admin@landscape.local}"
@@ -246,7 +266,7 @@ echo "Starting landscape-package-search..."
 
 # Fix CSP to allow localhost access
 echo "Configuring CSP for localhost access..."
-cat >> /etc/apache2/sites-available/localhost.conf <<'CSPEOF'
+cat >> "$VHOST_CONF" <<'CSPEOF'
 
 <IfModule mod_headers.c>
   Header always set Content-Security-Policy "default-src 'self' https://localhost:* localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://localhost:* localhost:* assets.ubuntu.com www.googletagmanager.com www.google-analytics.com script.crazyegg.com www.google.com www.google.ca https://*.maze.co/; style-src 'self' 'unsafe-inline' https://localhost:* localhost:* assets.ubuntu.com https://*.maze.co/; img-src 'self' https://localhost:* localhost:* assets.ubuntu.com data: www.googletagmanager.com www.google-analytics.com script.crazyegg.com www.google.com www.google.ca https://*.maze.co/; connect-src 'self' https://localhost:* localhost:* https://*.maze.co/"

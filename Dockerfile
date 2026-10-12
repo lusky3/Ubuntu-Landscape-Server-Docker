@@ -10,6 +10,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG LANDSCAPE_VERSION=""
 ARG ACME_SH_VERSION="3.1.4"
 
+# The landscape package generates a self-signed cert/key at install time. It is
+# removed in the same layer so the key is never shipped in the image; the
+# entrypoint creates a certificate on first boot (ACME-issued or self-signed).
 # hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -28,6 +31,7 @@ RUN apt-get update && \
     PKG="landscape-server-quickstart"; \
     if [ -n "$LANDSCAPE_VERSION" ]; then PKG="${PKG}=${LANDSCAPE_VERSION}"; fi; \
     apt-get install -y --no-install-recommends "$PKG" && \
+    rm -f /etc/ssl/certs/landscape_server.pem /etc/ssl/private/landscape_server.key && \
     rm -f /usr/sbin/policy-rc.d && \
     rm -rf /var/lib/apt/lists/*
 

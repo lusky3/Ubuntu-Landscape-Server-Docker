@@ -5,9 +5,10 @@ on:
     - cron: '0 0 * * 0'  # Weekly on Sunday
   workflow_dispatch:
 
+# Writes (branch push, PR creation) use the LuskTech-Neko app token below,
+# so the default token only needs to read the repository.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   check-updates:
@@ -47,10 +48,21 @@ jobs:
             "s|FROM ubuntu:${{ steps.check.outputs.current }}|FROM ubuntu:${{ steps.check.outputs.latest }}|g" \
             Dockerfile
 
+      # Events caused by the default GITHUB_TOKEN never trigger other workflows,
+      # so a PR opened with it gets no CI. The app token does trigger them.
+      - name: Generate LuskTech-Neko app token
+        if: steps.check.outputs.update_available == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Create Pull Request
         if: steps.check.outputs.update_available == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8
         with:
+          token: ${{ steps.app-token.outputs.token }}
           commit-message: "chore: update Ubuntu base image to ${{ steps.check.outputs.latest }}"
           title: "Update Ubuntu base image to ${{ steps.check.outputs.latest }}"
           body: |

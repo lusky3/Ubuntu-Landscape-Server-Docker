@@ -198,7 +198,10 @@ This project includes a comprehensive automated CI/CD pipeline:
 - **Landscape Version Tracking**: Weekly checks for new Landscape releases from Ubuntu PPA
 - **Base Image Updates**: Weekly checks for Ubuntu base image updates
 - **Dependabot**: Automatic dependency updates for GitHub Actions and Docker
-- **Auto-merge**: PRs with the `auto-merge` label are merged automatically. A merge is only held back for CI if the `Main` ruleset requires status checks.
+- **Auto-merge**: PRs with the `auto-merge` label are merged automatically once the required checks pass.
+- **Required checks**: the `Main` ruleset blocks merging into `main` until `test-server`, `test-client`, `shellcheck`,
+  `yaml-lint`, `hadolint (Dockerfile)` and `hadolint (clients/Dockerfile.client)` have passed. If you rename or remove
+  one of those jobs, update the ruleset as well, otherwise merges wait forever for a check that never reports.
 - **Automation identity**: the Landscape/base-image update PRs are opened, and auto-merged PRs are merged, by the
   [LuskTech-Neko](https://github.com/apps/lusktech-neko) GitHub App. GitHub does not run workflows for PRs or pushes
   made with the default `GITHUB_TOKEN`, so the app token is what makes CI and image publishing run on them. It needs

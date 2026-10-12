@@ -27,6 +27,9 @@ jobs:
       packages: write
       security-events: write
     strategy:
+      # Each version is an independent image: one failing the vulnerability gate
+      # must not cancel (and so block publishing) the other versions.
+      fail-fast: false
       matrix:
         version: ['12.04', '14.04', '16.04', '18.04', '20.04', '22.04', '24.04', '25.10']
 

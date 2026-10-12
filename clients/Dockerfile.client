@@ -10,12 +10,16 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0"
 ARG UBUNTU_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
-# hadolint ignore=DL3008
+# The upstream ubuntu base images lag the archive's security updates, so upgrade
+# installed packages at build time; otherwise the Trivy gate in build-clients.yml
+# fails on fixable CVEs that exist only in the base image (e.g. libssl3).
+# hadolint ignore=DL3005,DL3008
 RUN if [ "$UBUNTU_VERSION" = "12.04" ]; then \
       # 12.04 (Precise) is EOL and was moved off the primary archive mirrors.
       sed -i -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' /etc/apt/sources.list; \
     fi && \
     apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
       landscape-client \
       ca-certificates && \

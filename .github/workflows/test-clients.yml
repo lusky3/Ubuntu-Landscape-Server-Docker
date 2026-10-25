@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   test-clients:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         version: ['12.04', '14.04', '16.04', '18.04', '20.04', '22.04', '24.04', '25.10']

@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   check-landscape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.check.outputs.latest }}
       update_available: ${{ steps.check.outputs.update_available }}

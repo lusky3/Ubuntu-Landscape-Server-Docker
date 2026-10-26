@@ -23,7 +23,7 @@ env:
 
 jobs:
   build-server:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -131,7 +131,7 @@ jobs:
   notify:
     needs: build-server
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Notify Discord
         uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708  # v1

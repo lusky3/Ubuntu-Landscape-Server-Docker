@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test-server:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -65,7 +65,7 @@ jobs:
         run: docker compose down -v
 
   test-client:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -117,7 +117,7 @@ jobs:
         run: docker compose --profile with-client down -v
 
   security-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write

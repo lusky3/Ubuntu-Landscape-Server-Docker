@@ -385,13 +385,16 @@ generate_hash_ids() {
 }
 
 SUP_PID=""
+STOPPING=0
 forward_signal() {
+  STOPPING=1
   if [ -n "$SUP_PID" ]; then
     kill -TERM "$SUP_PID" 2>/dev/null || true
   fi
 }
 
 main() {
+  rm -f /run/ls-fatal
   restore_state
   mkdir -p /run/landscape /run/supervisor /var/log/supervisor "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
   chown landscape:landscape /run/landscape "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
@@ -440,6 +443,14 @@ main() {
   done
   echo "supervisord exited (rc=${rc}); saving configuration state."
   save_state || true
+  if [ "$STOPPING" = 1 ]; then
+    rc=0
+  fi
+  if [ -f /run/ls-fatal ]; then
+    echo "ERROR: a service failed permanently: $(cat /run/ls-fatal)" >&2
+    rm -f /run/ls-fatal
+    rc=1
+  fi
   exit "$rc"
 }
 

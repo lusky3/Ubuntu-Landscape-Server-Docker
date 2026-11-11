@@ -103,6 +103,36 @@ First startup takes 2-3 minutes:
 3. Configures PostgreSQL and RabbitMQ
 4. Initializes databases
 
+## Landscape 26.04: how it runs without systemd
+
+Landscape 26.04 removed its SysV init scripts and is managed only through systemd
+units, so the container runs everything under `supervisord` (`supervisord.conf`):
+PostgreSQL, RabbitMQ, rsyslog, Apache, cron (the maintenance jobs from
+`/etc/cron.d/landscape-server`) and every service in `landscape-server.target`
+(api, appserver, async-frontend, job-handler, msgserver, package-upload,
+pingserver, package-search, hostagent-consumer, hostagent-messenger,
+secrets-service). The three companion snaps Canonical ships only as snaps
+(`landscape-outbox`, `landscape-task-handler`, `landscape-debarchive`) are
+unpacked at build time (checksum-pinned) and run directly, with
+`scripts/snapctl` standing in for snapd's `snapctl`. Outbox, computer soft
+deletion and repository mirrors are enabled by default; set
+`LANDSCAPE_ENABLE_OUTBOX`, `LANDSCAPE_ENABLE_SOFT_DELETION`,
+`LANDSCAPE_ENABLE_REPOSITORY_MIRRORS` or `LANDSCAPE_ENABLE_PRO_LICENSING` to
+`false` to turn one off.
+
+If any program exhausts its start retries (supervisord `FATAL`), the container
+exits; the healthcheck (`ls-healthcheck`) reports unhealthy whenever any
+program is not `RUNNING` or `/ping` fails. Give the container time to stop
+cleanly (`stop_grace_period: 60s` in `compose.yml`).
+
+Configuration generated at first boot (service.conf, Apache vhost, certificates)
+is archived into the `/var/lib/landscape` volume and restored on a new container.
+
+Licensing: computers can only be accepted if the account has licenses. Mount a
+Landscape license at `/etc/landscape/license.txt`, or rely on Ubuntu Pro
+licensing (enabled by default here; unlicensed computers are accepted with a
+reduced feature set).
+
 ## Create Admin Account
 
 On first access, you'll see a signup form to create the admin account.

@@ -16,6 +16,7 @@ while true; do
     payload=$(head -c "$len")
   fi
   echo "ls-fatal-listener: program entered FATAL: ${payload}" >&2
+  echo "$payload" > /run/ls-fatal
   printf 'RESULT 2\nOK'
   kill -TERM "$(cat /run/supervisord.pid)" 2>/dev/null || true
 done

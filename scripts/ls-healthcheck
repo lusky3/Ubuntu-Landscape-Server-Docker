@@ -1,7 +1,11 @@
 #!/bin/bash
-# Healthy only if every supervised program is RUNNING and the public
-# endpoint answers. (supervisorctl status exits non-zero otherwise.)
+# Healthy only if every supervised program is RUNNING (not STARTING, BACKOFF,
+# STOPPED or FATAL) and the public endpoint answers.
 set -euo pipefail
 
-supervisorctl -c /etc/supervisor/supervisord.conf status >/dev/null
+status=$(supervisorctl -c /etc/supervisor/supervisord.conf status || true)
+if [ -z "$status" ] || grep -v ' RUNNING' <<<"$status" | grep -q .; then
+  echo "unhealthy: $(grep -v ' RUNNING' <<<"$status" | head -3)" >&2
+  exit 1
+fi
 curl -fsk -o /dev/null https://localhost/ping

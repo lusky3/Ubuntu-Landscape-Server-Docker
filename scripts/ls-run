@@ -23,6 +23,18 @@ wait_port() {
 until pg_isready -q -h 127.0.0.1; do sleep 1; done
 wait_port 5672
 
+# If a previous instance was SIGKILLed, its worker children are orphaned and keep
+# the listening ports. supervisord gives every program its own process group
+# (pgid == pid of this script), so kill whatever is left of the old group.
+pgfile="/run/landscape/ls-${name}.pgid"
+if [ -f "$pgfile" ]; then
+  old=$(cat "$pgfile")
+  if [ -n "$old" ] && [ "$old" != "$$" ]; then
+    kill -KILL -- "-${old}" 2>/dev/null || true
+  fi
+fi
+echo "$$" > "$pgfile"
+
 if [ -n "${LS_PRESTART:-}" ]; then
   "$LS_PRESTART"
 fi

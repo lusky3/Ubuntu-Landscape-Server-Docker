@@ -13,8 +13,11 @@ ARG ACME_SH_VERSION="3.1.4"
 # The landscape package generates a self-signed cert/key at install time. It is
 # removed in the same layer so the key is never shipped in the image; the
 # entrypoint creates a certificate on first boot (ACME-issued or self-signed).
-# hadolint ignore=DL3008
+# The upgrade picks up security fixes published after the ubuntu base image was
+# built, so the publish-time Trivy gate does not fail on lagging base packages.
+# hadolint ignore=DL3005,DL3008
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
       sudo \
       ca-certificates \

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Launch wrapper for Landscape services under supervisord.
+# usage: ls-run <name> <command...>
+# Emulates the systemd ordering (After=rabbitmq-server.service) and
+# ExecStartPre= (LS_PRESTART) of the packaged landscape-*.service units.
+set -euo pipefail
+
+name="$1"
+shift
+
+wait_port() {
+  local port="$1"
+  for _ in $(seq 1 120); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ls-run(${name}): timed out waiting for port ${port}" >&2
+  return 1
+}
+
+until pg_isready -q -h 127.0.0.1; do sleep 1; done
+wait_port 5672
+
+if [ -n "${LS_PRESTART:-}" ]; then
+  "$LS_PRESTART"
+fi
+
+/opt/canonical/landscape/log-system-event "landscape-${name}" start || true
+exec "$@"

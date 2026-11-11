@@ -1,0 +1,20 @@
+#!/bin/sh
+# usage: fetch-snap <dest-dir> <download-file> <sha3-384>
+# Download a snap from the Snap Store by its immutable file name, verify its
+# SHA3-384, and unpack it with unsquashfs.
+set -eu
+
+dest="$1"
+file="$2"
+sha="$3"
+
+curl -fsSL -o /tmp/pkg.snap "https://api.snapcraft.io/api/v1/snaps/download/${file}"
+echo "${sha}  /tmp/pkg.snap" > /tmp/pkg.sha
+actual=$(openssl dgst -sha3-384 -r /tmp/pkg.snap | cut -d' ' -f1)
+if [ "$actual" != "$sha" ]; then
+  echo "SHA3-384 mismatch for ${file}: ${actual}" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "$dest")"
+unsquashfs -q -d "$dest" /tmp/pkg.snap
+rm -f /tmp/pkg.snap /tmp/pkg.sha

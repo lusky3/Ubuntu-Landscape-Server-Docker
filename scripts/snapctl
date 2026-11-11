@@ -1,0 +1,16 @@
+#!/bin/sh
+# Minimal stand-in for snapd's snapctl, so the landscape-outbox and
+# landscape-debarchive snap binaries (which read their configuration with
+# `snapctl get <key>`) can run without snapd.
+#
+# Every key is empty (the binaries then fall back to /etc/landscape/service.conf
+# and built-in defaults) unless an environment variable SNAPCTL_<KEY> is set,
+# where <KEY> is the key upper-cased with non-alphanumerics turned into "_",
+# e.g. SNAPCTL_DEB_ARCHIVE_TEMPORAL_ADDRESS for deb.archive.temporal.address.
+set -eu
+
+if [ "${1:-}" != "get" ] || [ -z "${2:-}" ]; then
+  exit 0
+fi
+name=$(printf '%s' "$2" | tr 'a-z.-' 'A-Z__')
+eval "printf '%s\\n' \"\${SNAPCTL_${name}:-}\""

@@ -265,7 +265,7 @@ run_first_time_setup() {
   fi
 
   echo "Creating default admin account..."
-  local admin_email="${ADMIN_EMAIL:-admin@landscape.local}" admin_password
+  local admin_email="${ADMIN_EMAIL:-admin@landscape.example}" admin_password
   if [ -n "${ADMIN_PASSWORD:-}" ]; then
     echo "Using admin password from ADMIN_PASSWORD environment variable."
     admin_password="$ADMIN_PASSWORD"
@@ -297,6 +297,7 @@ CREDSEOF
 
 # Set keys in the [features] section of service.conf (edited in place so the
 # file's owner and mode are kept). Usage: set_features key=value...
+# An empty value removes the key.
 set_features() {
   python3 -I - /etc/landscape/service.conf "$@" <<'PY'
 import sys
@@ -314,21 +315,43 @@ with open(conf, "r+") as f:
             end += 1
         for i in range(start, end):
             if lines[i].split("=")[0].strip() == key:
-                lines[i] = f"{key} = {value}"
+                if value:
+                    lines[i] = f"{key} = {value}"
+                else:
+                    del lines[i]
                 break
         else:
-            lines.insert(start, f"{key} = {value}")
+            if value:
+                lines.insert(start, f"{key} = {value}")
     f.seek(0)
     f.write("\n".join(lines))
     f.truncate()
 PY
 }
 
-# Outbox (needs the landscape-outbox service) and computer soft deletion (which
-# relies on the outbox); both default to on, set to "false" to disable.
+# Outbox (needs the landscape-outbox service), computer soft deletion (which
+# relies on the outbox), repository mirrors and Ubuntu Pro licensing all default to on; set the
+# matching variable to "false" to disable. Pro licensing is what lets computers
+# be accepted without a seat-based license file (legacy seats still take
+# precedence when /etc/landscape/license.txt is present).
 configure_features() {
   local outbox="${LANDSCAPE_ENABLE_OUTBOX:-true}" soft="${LANDSCAPE_ENABLE_SOFT_DELETION:-true}"
-  set_features "outbox=${outbox}" "computer_soft_deletion=${soft}"
+  local pro="${LANDSCAPE_ENABLE_PRO_LICENSING:-true}" mirrors=""
+  # Repository mirrors (served by the landscape-debarchive service). Landscape
+  # 26.04 reads this flag as an unrecognised service.conf key: any value enables
+  # it (and logs a harmless "invalid and ignored" warning), so only write it when on.
+  if [ "${LANDSCAPE_ENABLE_REPOSITORY_MIRRORS:-true}" = "true" ]; then mirrors="true"; fi
+  set_features "outbox=${outbox}" "computer_soft_deletion=${soft}" "ubuntu_pro_licensing=${pro}" \
+    "repository_mirrors=${mirrors}"
+}
+
+# The outbox talks to the task handler over mutual TLS. The snaps share the
+# client certificates through a content interface; here the task handler's
+# self-generated client certs are linked into the outbox's certificate directory.
+prepare_task_handler_certs() {
+  runuser -u landscape -- /usr/local/bin/ls-task-handler certs
+  ln -sfn "${DATA_DIR}/task-handler/certs/active/client" "${DATA_DIR}/outbox/grpc-certs"
+  chown -h landscape:landscape "${DATA_DIR}/outbox/grpc-certs"
 }
 
 # Hash-id databases for package reporting; slow and network-dependent, so run
@@ -370,8 +393,8 @@ forward_signal() {
 
 main() {
   restore_state
-  mkdir -p /run/landscape /run/supervisor /var/log/supervisor "$DATA_DIR/debarchive" "$DATA_DIR/outbox"
-  chown landscape:landscape /run/landscape "$DATA_DIR/debarchive" "$DATA_DIR/outbox"
+  mkdir -p /run/landscape /run/supervisor /var/log/supervisor "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
+  chown landscape:landscape /run/landscape "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
   ensure_certificate
   init_postgres_cluster
 
@@ -403,6 +426,7 @@ main() {
     wait "$SUP_PID" || true
     exit 1
   fi
+  prepare_task_handler_certs
   save_state
 
   echo "Starting Landscape services..."

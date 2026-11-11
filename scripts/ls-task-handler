@@ -1,0 +1,62 @@
+#!/bin/bash
+# Run one app of the landscape-task-handler snap without snapd.
+# usage: ls-task-handler <server|worker|cleanup|renew>
+#
+# The snap normally receives its database settings through `snap set`; here they
+# are derived from /etc/landscape/service.conf. The task handler keeps its own
+# queue table (computer_deletion_task) in the main Landscape database and needs
+# schema-owner rights there, so it uses the [schema] credentials.
+set -euo pipefail
+
+mode="${1:?usage: ls-task-handler <server|worker|cleanup|renew>}"
+
+SNAP=/opt/snaps/landscape-task-handler
+SNAP_COMMON=/var/lib/landscape/task-handler
+export SNAP SNAP_COMMON
+export SNAP_DATA="$SNAP_COMMON" SNAP_NAME=landscape-task-handler
+export LANDSCAPE_CONFIG_FILE=/etc/landscape/service.conf
+export LANDSCAPE_TASK_HANDLER_SERVER_HOST=localhost
+export LANDSCAPE_DATABASE_TASK_HANDLER_HOST=localhost
+export LANDSCAPE_DATABASE_TASK_HANDLER_PORT=5432
+export LANDSCAPE_DATABASE_TASK_HANDLER_SSL=disable
+
+{
+  read -r db
+  read -r user
+  read -r password
+} < <(/opt/venvs/landscape/bin/python3 -c '
+import configparser
+from canonical.lib.text import password_decode
+c = configparser.ConfigParser()
+c.read("/etc/landscape/service.conf")
+print(c["stores"]["main"])
+print(c["schema"]["store_user"])
+print(password_decode(c["schema"]["store_password"]))
+')
+export LANDSCAPE_DATABASE_TASK_HANDLER_NAME="$db"
+export LANDSCAPE_DATABASE_TASK_HANDLER_USER="$user"
+export LANDSCAPE_DATABASE_TASK_HANDLER_PASSWORD="$password"
+
+case "$mode" in
+  server)
+    exec "$SNAP/snap/local/start-server.sh"
+    ;;
+  worker)
+    # The server creates the queue table on start; wait for its gRPC port.
+    until (exec 3<>/dev/tcp/127.0.0.1/50053) 2>/dev/null; do sleep 1; done
+    exec "$SNAP/snap/local/start-worker.sh"
+    ;;
+  cleanup)
+    exec "$SNAP/snap/local/start-cleanup.sh"
+    ;;
+  renew)
+    exec "$SNAP/bin/landscape-task-handler-cert-manager" --renew
+    ;;
+  certs)
+    exec "$SNAP/bin/landscape-task-handler-cert-manager" --common-dir "$SNAP_COMMON"
+    ;;
+  *)
+    echo "unknown mode: $mode" >&2
+    exit 2
+    ;;
+esac

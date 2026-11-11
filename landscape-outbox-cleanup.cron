@@ -1,3 +1,0 @@
-# Replacement for the landscape-outbox snap's "cleanup" timer (every 10 minutes).
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-*/10 * * * * landscape SNAP=/opt/snaps/landscape-outbox SNAP_NAME=landscape-outbox SNAP_DATA=/var/lib/landscape/outbox SNAP_COMMON=/var/lib/landscape/outbox LANDSCAPE_CONFIG_FILE=/etc/landscape/service.conf /opt/snaps/landscape-outbox/snap/local/start-cleanup.sh > /var/log/landscape/outbox-cleanup.log 2>&1

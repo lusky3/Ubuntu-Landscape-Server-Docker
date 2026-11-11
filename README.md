@@ -108,7 +108,7 @@ First startup takes 2-3 minutes:
 On first access, you'll see a signup form to create the admin account.
 
 Alternatively, a default admin account is created automatically on first boot:
-- Email: `admin@landscape.local` (override with the `ADMIN_EMAIL` env var)
+- Email: `admin@landscape.example` (override with the `ADMIN_EMAIL` env var)
 - Password: a randomly generated password, written to
   `/var/lib/landscape/admin-credentials.txt` inside the container
   (root-readable only). Retrieve it with:

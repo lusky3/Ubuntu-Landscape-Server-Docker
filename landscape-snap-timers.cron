@@ -1,0 +1,7 @@
+# Replacements for the snap timers of landscape-outbox and landscape-task-handler.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# landscape-outbox "cleanup": every 10 minutes
+*/10 * * * * landscape SNAP=/opt/snaps/landscape-outbox SNAP_NAME=landscape-outbox SNAP_DATA=/var/lib/landscape/outbox SNAP_COMMON=/var/lib/landscape/outbox LANDSCAPE_CONFIG_FILE=/etc/landscape/service.conf /opt/snaps/landscape-outbox/snap/local/start-cleanup.sh >> /var/log/landscape/outbox-cleanup.log 2>&1
+# landscape-task-handler "cleanup": every 10 minutes; "cert-renewer": hourly
+5-59/10 * * * * landscape /usr/local/bin/ls-task-handler cleanup >> /var/log/landscape/task-handler-cleanup.log 2>&1
+17 * * * * landscape /usr/local/bin/ls-task-handler renew >> /var/log/landscape/task-handler-cert.log 2>&1

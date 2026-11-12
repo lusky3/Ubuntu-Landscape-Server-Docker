@@ -15,6 +15,7 @@ services:
       - postgres-data:/var/lib/postgresql
     environment:
       - LANDSCAPE_FQDN=${LANDSCAPE_FQDN:-localhost}
+      - LANDSCAPE_PUBLIC_PORT=${LANDSCAPE_PUBLIC_PORT:-443}
       - SKIP_HASH_ID_GENERATION=${SKIP_HASH_ID_GENERATION:-false}
     stop_grace_period: 60s
     healthcheck:

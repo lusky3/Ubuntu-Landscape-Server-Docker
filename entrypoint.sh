@@ -230,6 +230,21 @@ fixup_vhost() {
     RewriteRule ^/ping$ http://localhost:8070/ping [P,L]
     }' "$vhost_conf"
   fi
+
+  # The generated rules build the virtual-host URL from %{HTTP_HOST}:443. When the
+  # container's 443 is published on another host port the browser's Host header
+  # already carries a port ("localhost:8443"), giving "localhost:8443:443" and an
+  # HTTP 500. Use the port-less %{SERVER_NAME} plus the public port instead. Runs on
+  # every start (the vhost may come back from the saved state) and is idempotent:
+  # both the original and the rewritten forms are matched.
+  local port="${LANDSCAPE_PUBLIC_PORT:-443}"
+  case "$port" in
+    '' | *[!0-9]*) echo "ERROR: LANDSCAPE_PUBLIC_PORT must be a port number, got '${port}'" >&2; return 1 ;;
+  esac
+  sed -i -E \
+    -e "s#(\+\+vh\+\+https:)(%\{HTTP_HOST\}|%\{SERVER_NAME\}):[0-9]+/#\1%{SERVER_NAME}:${port}/#" \
+    -e "s#https://(%\{HTTP_HOST\}|%\{SERVER_NAME\}):[0-9]+/?%\{REQUEST_URI\}#https://%{SERVER_NAME}:${port}%{REQUEST_URI}#" \
+    "$vhost_conf"
 }
 
 run_first_time_setup() {

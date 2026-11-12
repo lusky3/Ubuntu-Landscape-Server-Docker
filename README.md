@@ -95,6 +95,13 @@ How it works:
 - `8080`: HTTP (redirects to HTTPS)
 - `443`: HTTPS (main access)
 
+If you publish 443 on a different host port (e.g. `-p 8443:443`), set
+`LANDSCAPE_PUBLIC_PORT=8443` (default `443`). Without it the classic UI returns
+HTTP 500 and the HTTP-to-HTTPS redirect points at the wrong port, because the
+generated Apache vhost hardcodes `:443` in its virtual-host rewrite rules. The
+entrypoint rewrites those rules on every start. Leave it at `443` behind a
+reverse proxy that serves HTTPS on 443.
+
 ## First Boot
 
 First startup takes 2-3 minutes:

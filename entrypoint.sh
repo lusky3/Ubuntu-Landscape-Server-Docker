@@ -250,21 +250,82 @@ fixup_vhost() {
     "$vhost_conf"
 }
 
+# The roles in a 24.04 database keep passwords that only the lost service.conf
+# knew. Give them new ones and record those in the freshly generated service.conf.
+reset_legacy_db_passwords() {
+  /opt/venvs/landscape/bin/python3 - <<'PY'
+import subprocess
+from configparser import RawConfigParser
+
+from canonical.lib.text import generate_password, password_encode
+
+CONF = "/etc/landscape/service.conf"
+conf = RawConfigParser()
+conf.read(CONF)
+for section, user_key, pw_key, default in (
+    ("stores", "user", "password", "landscape"),
+    ("schema", "store_user", "store_password", "landscape_superuser"),
+):
+    if not conf.has_section(section):
+        conf.add_section(section)
+    role = conf.get(section, user_key, fallback=default)
+    password = generate_password(16)
+    subprocess.run(
+        ["runuser", "-u", "postgres", "--", "psql", "-q", "-v", "ON_ERROR_STOP=1", "-c",
+         f"ALTER ROLE \"{role}\" PASSWORD '{password}'"],
+        check=True,
+    )
+    conf.set(section, pw_key, password_encode(password))
+with open(CONF, "w") as f:
+    conf.write(f)
+PY
+}
+
+# 24.04 images created the admin as admin@landscape.local, which the 26.04 login
+# rejects as an invalid address. Move that default account to ADMIN_EMAIL
+# (default admin@landscape.example); the password is unchanged.
+rename_legacy_admin() {
+  local old="admin@landscape.local" new="${ADMIN_EMAIL:-admin@landscape.example}"
+  [ "$new" != "$old" ] || return 0
+  if runuser -u postgres -- psql -d landscape-standalone-main -qAt -v ON_ERROR_STOP=1 \
+    -v old="$old" -v new="$new" <<'SQL'
+UPDATE person SET email = :'new'
+ WHERE email = :'old' AND NOT EXISTS (SELECT 1 FROM person WHERE email = :'new');
+SQL
+  then
+    sed -i "s/^email: ${old}\$/email: ${new}/" "${DATA_DIR}/admin-credentials.txt" 2>/dev/null || true
+    echo "Legacy admin login is now ${new}."
+  else
+    echo "WARNING: could not rename the legacy admin account." >&2
+  fi
+}
+
 run_first_time_setup() {
   local db_exists=false
   if runuser -u postgres -- psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw landscape-standalone-main; then
     db_exists=true
   fi
 
-  if [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$db_exists" = true ] && [ -s /etc/landscape/service.conf ]; then
+  # Volumes written by the 24.04 image carry the database and .quickstart_done
+  # but no saved configuration archive: its service.conf (with the database
+  # passwords), Apache vhost and RabbitMQ settings lived only in the old
+  # container. Re-run quickstart to regenerate them, but keep the old accounts.
+  local legacy=false
+  if [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$db_exists" = true ] && [ ! -f "$STATE_TAR" ]; then
+    legacy=true
+    echo "Existing data from an older image found without saved configuration - upgrading in place."
+  elif [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$db_exists" = true ] && [ -s /etc/landscape/service.conf ]; then
     echo "Skipping landscape-quickstart (already done)."
     return 0
   fi
-  if [ -f "${DATA_DIR}/.quickstart_done" ]; then
+  if [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$legacy" = false ]; then
     echo "Database or configuration missing - re-running quickstart..."
     rm -f "${DATA_DIR}/.quickstart_done"
   fi
 
+  if [ "$legacy" = true ]; then
+    reset_legacy_db_passwords
+  fi
   echo "Running landscape-quickstart..."
   if ! landscape-quickstart --skip-ssl; then
     echo "ERROR: landscape-quickstart failed. Aborting startup." >&2
@@ -280,6 +341,12 @@ run_first_time_setup() {
   else
     echo "Regenerating SSL certificate with SAN..."
     generate_self_signed_cert
+  fi
+
+  if [ "$legacy" = true ]; then
+    rename_legacy_admin
+    touch "${DATA_DIR}/.quickstart_done"
+    return 0
   fi
 
   echo "Creating default admin account..."

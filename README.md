@@ -142,6 +142,36 @@ Landscape license at `/etc/landscape/license.txt`, or rely on Ubuntu Pro
 licensing (enabled by default here; unlicensed computers are accepted with a
 reduced feature set).
 
+## Upgrading from 24.04
+
+The 26.04 image can run on the volumes of a 24.04 image (`/var/lib/postgresql`
+and `/var/lib/landscape`): stop the old container gracefully (`docker stop`),
+then start the new image with the same two volumes. On the first boot it
+notices data without a saved configuration archive and, in place:
+
+- runs `landscape-quickstart` again to regenerate `service.conf`, the Apache
+  vhost and the RabbitMQ settings (the 24.04 image kept them only in the
+  container, not on a volume);
+- gives the database roles new passwords and records them in `service.conf`;
+- migrates the schema to 26.04 (this cannot be rolled back, so back up both
+  volumes first);
+- renames the default admin `admin@landscape.local` to `ADMIN_EMAIL` (default
+  `admin@landscape.example`), because the 26.04 login rejects `.local`
+  addresses. The password is unchanged.
+
+Manual steps:
+
+- **Admin login:** use the new email. If you chose a custom `.local` admin
+  address, change it yourself.
+- **Clients that pin the server certificate** (`ssl_public_key`, as the test
+  client in this repo does) will fail with "server certificate verification
+  failed", because the self-signed certificate lived in the old container and
+  a new one is generated. Either copy the old certificate and key out before
+  removing the old container (`docker cp <old>:/etc/ssl/certs/landscape_server.pem .`
+  and `docker cp <old>:/etc/ssl/private/landscape_server.key .`) and mount them
+  at the same paths in the new one, or re-fetch the certificate on each client.
+  Clients that trust a CA-issued (ACME) certificate are not affected.
+
 ## Create Admin Account
 
 On first access, you'll see a signup form to create the admin account.

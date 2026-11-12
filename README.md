@@ -86,9 +86,11 @@ How it works:
   to try your setup against Let's Encrypt staging first; staging certificates are not trusted by browsers,
   but they don't count against production rate limits.
 - If issuance fails, the error is logged and the container falls back to a self-signed certificate.
-- The certificate is requested when a container is first created and is **not renewed automatically**.
-  Let's Encrypt certificates last 90 days, so recreate the container before then
-  (`docker compose up -d --force-recreate landscape`). Each re-issue counts toward Let's Encrypt rate limits.
+- The certificate is requested when a container is first created. It is stored with acme.sh's account
+  data in the `landscape` volume, so restarts and recreated containers reuse it without a new issuance.
+- Renewal is automatic: a daily cron job runs `acme.sh --cron`, which renews certificates that are within
+  30 days of expiry (the DNS credentials are kept in acme.sh's account config), reinstalls the files and
+  reloads Apache without a restart. The log is `/var/log/landscape/acme-renew.log`.
 
 ## Ports
 

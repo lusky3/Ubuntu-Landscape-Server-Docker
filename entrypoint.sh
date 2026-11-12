@@ -18,6 +18,8 @@ KEY_PATH="/etc/ssl/private/landscape_server.key"
 # any extra certificates in CERT_PATH, so ACME intermediates must be installed here.
 CA_PATH="/etc/ssl/certs/landscape_server_ca.crt"
 ACME_HOME="/opt/acme.sh"
+# Run by acme.sh after every (re-)install of the certificate, including renewals from cron.
+ACME_RELOAD_CMD="pgrep -x apache2 >/dev/null && apache2ctl graceful || true"
 # ACME CA to use; set ACME_SERVER=letsencrypt_test for Let's Encrypt staging.
 ACME_SERVER="${ACME_SERVER:-letsencrypt}"
 DATA_DIR="/var/lib/landscape"
@@ -102,7 +104,8 @@ acme_cert_exists() {
 # CERT_PATH and the intermediate chain in CA_PATH so clients can build the chain.
 install_acme_cert() {
   "${ACME_HOME}/acme.sh" --home "$ACME_HOME" --install-cert -d "$FQDN" \
-    --key-file "$KEY_PATH" --cert-file "$CERT_PATH" --ca-file "$CA_PATH"
+    --key-file "$KEY_PATH" --cert-file "$CERT_PATH" --ca-file "$CA_PATH" \
+    --reloadcmd "$ACME_RELOAD_CMD"
   chmod 600 "$KEY_PATH"
   chmod 644 "$CERT_PATH" "$CA_PATH"
 }

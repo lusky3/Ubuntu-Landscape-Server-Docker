@@ -86,6 +86,7 @@ COPY --from=snaps /opt/snaps /opt/snaps
 COPY scripts/snapctl /usr/local/bin/snapctl
 COPY supervisord.conf /etc/supervisor/supervisord.conf
 COPY --chmod=0644 landscape-snap-timers.cron /etc/cron.d/landscape-snap-timers
+COPY --chmod=0644 landscape-acme-renew.cron /etc/cron.d/landscape-acme-renew
 COPY scripts/ls-run scripts/ls-apache scripts/ls-fatal-listener scripts/ls-healthcheck scripts/ls-task-handler /usr/local/bin/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/snapctl /usr/local/bin/ls-run /usr/local/bin/ls-apache \

@@ -422,9 +422,10 @@ PY
 configure_features() {
   local outbox="${LANDSCAPE_ENABLE_OUTBOX:-true}" soft="${LANDSCAPE_ENABLE_SOFT_DELETION:-true}"
   local pro="${LANDSCAPE_ENABLE_PRO_LICENSING:-true}" mirrors=""
-  # Repository mirrors (served by the landscape-debarchive service). Landscape
-  # 26.04 reads this flag as an unrecognised service.conf key: any value enables
-  # it (and logs a harmless "invalid and ignored" warning), so only write it when on.
+  # Repository mirrors (served by the landscape-debarchive service). This is a
+  # real feature flag (config_key "repository_mirrors" in features/flag.py), but
+  # the service.conf validator does not list it and logs a harmless "invalid and
+  # ignored" warning. Any value enables it, so only write it when on.
   if [ "${LANDSCAPE_ENABLE_REPOSITORY_MIRRORS:-true}" = "true" ]; then mirrors="true"; fi
   set_features "outbox=${outbox}" "computer_soft_deletion=${soft}" "ubuntu_pro_licensing=${pro}" \
     "repository_mirrors=${mirrors}"
@@ -485,6 +486,19 @@ generate_hash_ids() {
   ) &
 }
 
+# Release-upgrade targets come from Ubuntu's meta-release data, which the
+# packaged cron only fetches daily at 02:30. Without it a new server answers
+# "no_meta_release" until the next night, so fetch it in the background on start.
+refresh_meta_releases() {
+  (
+    if runuser -u landscape -- /opt/canonical/landscape/scripts/meta_releases.sh >/dev/null 2>&1; then
+      echo "Meta-release data refreshed."
+    else
+      echo "WARNING: meta-release refresh failed; the daily cron job will retry." >&2
+    fi
+  ) &
+}
+
 SUP_PID=""
 STOPPING=0
 forward_signal() {
@@ -535,6 +549,7 @@ main() {
 
   echo "Starting Landscape services..."
   supctl start 'ls:*'
+  refresh_meta_releases
   generate_hash_ids
 
   # Block until supervisord exits (SIGTERM from docker stop, or the FATAL listener).

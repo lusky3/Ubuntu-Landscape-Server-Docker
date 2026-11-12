@@ -40,6 +40,9 @@ docker compose up -d
 ## Prerequisites
 
 - Docker and Docker Compose
+- BuildKit for local builds (the Dockerfile uses `COPY --chmod`). On Ubuntu's
+  `docker.io` package, also install `docker-buildx`.
+- An amd64 host
 
 ## SSL Certificates
 
@@ -139,8 +142,27 @@ is archived into the `/var/lib/landscape` volume and restored on a new container
 
 Licensing: computers can only be accepted if the account has licenses. Mount a
 Landscape license at `/etc/landscape/license.txt`, or rely on Ubuntu Pro
-licensing (enabled by default here; unlicensed computers are accepted with a
-reduced feature set).
+licensing (enabled by default here). Under Pro licensing, a client must itself
+be attached to Ubuntu Pro (`sudo pro attach <token>`; a free personal token
+covers 5 machines) to be managed. An unattached client is accepted and keeps
+checking in, but the server only takes `operation-result`, `resynchronize` and
+`ubuntu-pro-info` messages from it. So it reports no packages, and scripts,
+package changes, release upgrades and FDE recovery keys are refused with "due to
+its licensing state".
+
+Persist both volumes. The database lives in `/var/lib/postgresql`, so a new
+container that keeps only `/var/lib/landscape` starts with an empty database.
+
+Known limits:
+- amd64 only. The 26.04 PPA does not publish `landscape-server` or
+  `landscape-server-quickstart` for arm64.
+- `LANDSCAPE_FQDN` must be a DNS name, not a bare IP. The self-signed
+  certificate only carries DNS names.
+- PAM login (enabled when `/etc/pam.d/landscape` exists) needs manual setup:
+  each person's `identity` set, and the `landscape` user in group `shadow` for
+  `pam_unix`. Neither is kept when the container is recreated.
+- The repository-mirror daemon (debarchive) runs without its bundled Temporal
+  server, so long-running mirror operations do not survive a restart.
 
 ## Upgrading from 24.04
 

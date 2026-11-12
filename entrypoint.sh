@@ -455,11 +455,27 @@ generate_hash_ids() {
   mkdir -p "${DATA_DIR}/hash-id-databases"
   chown landscape:landscape "${DATA_DIR}/hash-id-databases"
   (
+    # A throwaway GNUPGHOME: root has no ~/.gnupg here, which stops dirmngr.
+    GNUPGHOME=$(mktemp -d)
+    export GNUPGHOME
     gpg --no-default-keyring --keyring /etc/apt/trusted.gpg.d/ubuntu-archive-runtime.gpg \
       --keyserver keyserver.ubuntu.com --recv-keys \
       40976EAF437D05B5 3B4FE6ACC0B21F32 871920D1991BC93C \
       || echo "WARNING: failed to import Ubuntu archive GPG keys." >&2
-    if runuser -u landscape -- python3 /opt/canonical/landscape/hash-id-databases \
+    chmod 644 /etc/apt/trusted.gpg.d/ubuntu-archive-runtime.gpg 2>/dev/null || true
+    gpgconf --kill dirmngr 2>/dev/null || true
+    rm -rf "$GNUPGHOME"
+    # Run the script itself: its shebang selects the Landscape virtualenv, which
+    # has the modules it imports (the system python3 does not).
+    # The hash-id stores only map packages that are in the package database.
+    # The stock package data (landscape-hashids) is not installed in this image,
+    # so seed the empty database from the archives; the script refuses to
+    # --populate a database that already has packages, so only do it when empty.
+    populate=()
+    if [ -z "$(runuser -u postgres -- psql -d landscape-standalone-package -Atc 'SELECT 1 FROM package LIMIT 1' 2>/dev/null)" ]; then
+      populate=(--populate true)
+    fi
+    if runuser -u landscape -- /opt/canonical/landscape/hash-id-databases "${populate[@]}" \
       --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf; then
       touch "${DATA_DIR}/.hash_id_done"
       echo "Hash-id database generation completed successfully."

@@ -8,7 +8,10 @@ dest="$1"
 file="$2"
 sha="$3"
 
-curl -fsSL -o /tmp/pkg.snap "https://api.snapcraft.io/api/v1/snaps/download/${file}"
+# Retry transient Snap Store/CDN failures (e.g. "Empty reply from server"); the
+# SHA3-384 check below still guards integrity.
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 --connect-timeout 20 \
+  -o /tmp/pkg.snap "https://api.snapcraft.io/api/v1/snaps/download/${file}"
 echo "${sha}  /tmp/pkg.snap" > /tmp/pkg.sha
 actual=$(openssl dgst -sha3-384 -r /tmp/pkg.snap | cut -d' ' -f1)
 if [ "$actual" != "$sha" ]; then

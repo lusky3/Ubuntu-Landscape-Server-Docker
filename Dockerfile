@@ -96,6 +96,9 @@ VOLUME ["/var/lib/postgresql", "/var/lib/landscape"]
 
 EXPOSE 6554 443 80
 STOPSIGNAL SIGTERM
+# No USER on purpose: supervisord runs PostgreSQL, RabbitMQ, Apache and the
+# Landscape services and needs root as PID 1; each service drops to its own user.
+# nosemgrep: dockerfile.security.missing-user.missing-user
 HEALTHCHECK --interval=15s --timeout=10s --start-period=180s --retries=3 \
   CMD ["/usr/local/bin/ls-healthcheck"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -135,7 +135,8 @@ deletion and repository mirrors are enabled by default; set
 If any program exhausts its start retries (supervisord `FATAL`), the container
 exits; the healthcheck (`ls-healthcheck`) reports unhealthy whenever any
 program is not `RUNNING` or `/ping` fails. Give the container time to stop
-cleanly (`stop_grace_period: 60s` in `compose.yml`).
+cleanly (`stop_grace_period: 120s` in `compose.yml`; with `docker run`, use
+`--stop-timeout 120`).
 
 Configuration generated at first boot (service.conf, Apache vhost, certificates)
 is archived into the `/var/lib/landscape` volume and restored on a new container.

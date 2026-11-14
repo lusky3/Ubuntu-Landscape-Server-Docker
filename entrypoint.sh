@@ -459,8 +459,8 @@ generate_hash_ids() {
     return 0
   fi
   if [ "${SKIP_HASH_ID_GENERATION:-false}" = "true" ]; then
+    # No marker: setting the variable back to false later should still generate them.
     echo "Skipping hash-id database generation (SKIP_HASH_ID_GENERATION=true)"
-    touch "${DATA_DIR}/.hash_id_done"
     return 0
   fi
   echo "Generating hash-id databases in background (this may take a few minutes)..."

@@ -16,12 +16,13 @@ services:
     environment:
       - LANDSCAPE_FQDN=${LANDSCAPE_FQDN:-localhost}
       - SKIP_HASH_ID_GENERATION=${SKIP_HASH_ID_GENERATION:-false}
+    stop_grace_period: 120s
     healthcheck:
-      test: ["CMD", "curl", "-fsk", "https://localhost/ping"]
+      test: ["CMD", "/usr/local/bin/ls-healthcheck"]
       interval: 15s
-      timeout: 5s
-      retries: 20
-      start_period: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
 
   landscape-client:
     build:

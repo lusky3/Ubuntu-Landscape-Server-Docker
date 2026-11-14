@@ -40,6 +40,9 @@ docker compose up -d
 ## Prerequisites
 
 - Docker and Docker Compose
+- BuildKit for local builds (the Dockerfile uses `COPY --chmod`). On Ubuntu's
+  `docker.io` package, also install `docker-buildx`.
+- An amd64 host
 
 ## SSL Certificates
 
@@ -86,14 +89,23 @@ How it works:
   to try your setup against Let's Encrypt staging first; staging certificates are not trusted by browsers,
   but they don't count against production rate limits.
 - If issuance fails, the error is logged and the container falls back to a self-signed certificate.
-- The certificate is requested when a container is first created and is **not renewed automatically**.
-  Let's Encrypt certificates last 90 days, so recreate the container before then
-  (`docker compose up -d --force-recreate landscape`). Each re-issue counts toward Let's Encrypt rate limits.
+- The certificate is requested when a container is first created. It is stored with acme.sh's account
+  data in the `landscape` volume, so restarts and recreated containers reuse it without a new issuance.
+- Renewal is automatic: a daily cron job runs `acme.sh --cron`, which renews certificates that are within
+  30 days of expiry (the DNS credentials are kept in acme.sh's account config), reinstalls the files and
+  reloads Apache without a restart. The log is `/var/log/landscape/acme-renew.log`.
 
 ## Ports
 
 - `8080`: HTTP (redirects to HTTPS)
 - `443`: HTTPS (main access)
+
+If you publish 443 on a different host port (e.g. `-p 8443:443`), set
+`LANDSCAPE_PUBLIC_PORT=8443` (default `443`). Without it the classic UI returns
+HTTP 500 and the HTTP-to-HTTPS redirect points at the wrong port, because the
+generated Apache vhost hardcodes `:443` in its virtual-host rewrite rules. The
+entrypoint rewrites those rules on every start. Leave it at `443` behind a
+reverse proxy that serves HTTPS on 443.
 
 ## First Boot
 
@@ -103,12 +115,92 @@ First startup takes 2-3 minutes:
 3. Configures PostgreSQL and RabbitMQ
 4. Initializes databases
 
+## Landscape 26.04: how it runs without systemd
+
+Landscape 26.04 removed its SysV init scripts and is managed only through systemd
+units, so the container runs everything under `supervisord` (`supervisord.conf`):
+PostgreSQL, RabbitMQ, rsyslog, Apache, cron (the maintenance jobs from
+`/etc/cron.d/landscape-server`) and every service in `landscape-server.target`
+(api, appserver, async-frontend, job-handler, msgserver, package-upload,
+pingserver, package-search, hostagent-consumer, hostagent-messenger,
+secrets-service). The three companion snaps Canonical ships only as snaps
+(`landscape-outbox`, `landscape-task-handler`, `landscape-debarchive`) are
+unpacked at build time (checksum-pinned) and run directly, with
+`scripts/snapctl` standing in for snapd's `snapctl`. Outbox, computer soft
+deletion and repository mirrors are enabled by default; set
+`LANDSCAPE_ENABLE_OUTBOX`, `LANDSCAPE_ENABLE_SOFT_DELETION`,
+`LANDSCAPE_ENABLE_REPOSITORY_MIRRORS` or `LANDSCAPE_ENABLE_PRO_LICENSING` to
+`false` to turn one off.
+
+If any program exhausts its start retries (supervisord `FATAL`), the container
+exits; the healthcheck (`ls-healthcheck`) reports unhealthy whenever any
+program is not `RUNNING` or `/ping` fails. Give the container time to stop
+cleanly (`stop_grace_period: 120s` in `compose.yml`; with `docker run`, use
+`--stop-timeout 120`).
+
+Configuration generated at first boot (service.conf, Apache vhost, certificates)
+is archived into the `/var/lib/landscape` volume and restored on a new container.
+
+Licensing: computers can only be accepted if the account has licenses. Mount a
+Landscape license at `/etc/landscape/license.txt`, or rely on Ubuntu Pro
+licensing (enabled by default here). Under Pro licensing, a client must itself
+be attached to Ubuntu Pro (`sudo pro attach <token>`; a free personal token
+covers 5 machines) to be managed. An unattached client is accepted and keeps
+checking in, but the server only takes `operation-result`, `resynchronize` and
+`ubuntu-pro-info` messages from it. So it reports no packages, and scripts,
+package changes, release upgrades and FDE recovery keys are refused with "due to
+its licensing state".
+
+Persist both volumes. The database lives in `/var/lib/postgresql`, so a new
+container that keeps only `/var/lib/landscape` starts with an empty database.
+
+Known limits:
+- amd64 only. The 26.04 PPA does not publish `landscape-server` or
+  `landscape-server-quickstart` for arm64.
+- `LANDSCAPE_FQDN` must be a DNS name, not a bare IP. The self-signed
+  certificate only carries DNS names.
+- PAM login (enabled when `/etc/pam.d/landscape` exists) needs manual setup:
+  each person's `identity` set, and the `landscape` user in group `shadow` for
+  `pam_unix`. Neither is kept when the container is recreated.
+- The repository-mirror daemon (debarchive) runs without its bundled Temporal
+  server, so long-running mirror operations do not survive a restart.
+
+## Upgrading from 24.04
+
+The 26.04 image can run on the volumes of a 24.04 image (`/var/lib/postgresql`
+and `/var/lib/landscape`): stop the old container gracefully (`docker stop`),
+then start the new image with the same two volumes. On the first boot it
+notices data without a saved configuration archive and, in place:
+
+- runs `landscape-quickstart` again to regenerate `service.conf`, the Apache
+  vhost and the RabbitMQ settings (the 24.04 image kept them only in the
+  container, not on a volume);
+- gives the database roles new passwords and records them in `service.conf`;
+- migrates the schema to 26.04 (this cannot be rolled back, so back up both
+  volumes first);
+- renames the default admin `admin@landscape.local` to `ADMIN_EMAIL` (default
+  `admin@landscape.example`), because the 26.04 login rejects `.local`
+  addresses. The password is unchanged.
+
+Manual steps:
+
+- **Admin login:** use the new email. If you chose a custom `.local` admin
+  address, change it yourself.
+- **Clients that pin the server certificate** (`ssl_public_key`, as the test
+  client in this repo does) will fail with "server certificate verification
+  failed", because the self-signed certificate lived in the old container and
+  a new one is generated. Either copy the old certificate and key out before
+  removing the old container (`docker cp <old>:/etc/ssl/certs/landscape_server.pem .`
+  and `docker cp <old>:/etc/ssl/private/landscape_server.key .`) and mount them
+  at the same paths in the new one, or re-fetch the certificate on each client.
+  Clients that trust a CA-issued (ACME) certificate are not affected.
+
 ## Create Admin Account
 
 On first access, you'll see a signup form to create the admin account.
 
 Alternatively, a default admin account is created automatically on first boot:
-- Email: `admin@landscape.local` (override with the `ADMIN_EMAIL` env var)
+- Email: `admin@landscape.example` (override with the `ADMIN_EMAIL` env var)
 - Password: a randomly generated password, written to
   `/var/lib/landscape/admin-credentials.txt` inside the container
   (root-readable only). Retrieve it with:

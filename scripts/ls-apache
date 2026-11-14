@@ -1,0 +1,7 @@
+#!/bin/bash
+# Run Apache in the foreground under supervisord.
+set -eo pipefail
+
+rm -f /run/apache2/apache2.pid
+mkdir -p /run/apache2 /run/lock/apache2
+exec apache2ctl -D FOREGROUND

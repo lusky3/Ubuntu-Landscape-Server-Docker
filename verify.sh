@@ -37,7 +37,7 @@ echo ""
 if [ "$FAILURES" -eq 0 ]; then
   echo "✅ SUCCESS: Client is enrolled and waiting for approval in Landscape dashboard"
   echo "   Access dashboard at: https://localhost"
-  echo "   Default admin email (unless ADMIN_EMAIL was overridden): admin@landscape.local"
+  echo "   Default admin email (unless ADMIN_EMAIL was overridden): admin@landscape.example"
   echo "   Password: docker exec landscape-server cat /var/lib/landscape/admin-credentials.txt"
   exit 0
 else

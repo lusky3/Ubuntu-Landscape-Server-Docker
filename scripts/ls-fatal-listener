@@ -1,0 +1,22 @@
+#!/bin/bash
+# supervisord event listener: when any program reaches FATAL (it kept failing
+# to start, the equivalent of a systemd start-limit hit), stop supervisord so
+# the container exits non-zero instead of looking healthy.
+set -u
+
+while true; do
+  echo "READY"
+  read -r header || exit 0
+  len=""
+  for kv in $header; do
+    case "$kv" in len:*) len="${kv#len:}" ;; esac
+  done
+  payload=""
+  if [ -n "$len" ]; then
+    payload=$(head -c "$len")
+  fi
+  echo "ls-fatal-listener: program entered FATAL: ${payload}" >&2
+  echo "$payload" > /run/ls-fatal
+  printf 'RESULT 2\nOK'
+  kill -TERM "$(cat /run/supervisord.pid)" 2>/dev/null || true
+done

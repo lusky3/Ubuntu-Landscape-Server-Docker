@@ -1,0 +1,52 @@
+#!/bin/bash
+# Launch wrapper for Landscape services under supervisord.
+# usage: ls-run <name> <command...>
+# Emulates the systemd ordering (After=rabbitmq-server.service) and
+# ExecStartPre= (LS_PRESTART) of the packaged landscape-*.service units.
+set -euo pipefail
+
+name="$1"
+shift
+
+wait_port() {
+  local port="$1"
+  for _ in $(seq 1 120); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ls-run(${name}): timed out waiting for port ${port}" >&2
+  return 1
+}
+
+until pg_isready -q -h 127.0.0.1; do sleep 1; done
+wait_port 5672
+
+# If a previous instance was SIGKILLed, its worker children are orphaned and keep
+# the listening ports. supervisord gives every program its own process group
+# (pgid == pid of this script), so kill whatever is left of the old group.
+# Each instance tags its environment with LS_RUN_NAME, which its children
+# inherit; only kill the old group if one of its members carries this service's
+# tag, so a reused id that now belongs to another group is left alone.
+pgfile="/run/landscape/ls-${name}.pgid"
+if [ -f "$pgfile" ]; then
+  old=$(cat "$pgfile")
+  if [ -n "$old" ] && [ "$old" != "$$" ]; then
+    for pid in $(pgrep -g "$old" 2>/dev/null || true); do
+      if grep -qzx "LS_RUN_NAME=${name}" "/proc/${pid}/environ" 2>/dev/null; then
+        kill -KILL -- "-${old}" 2>/dev/null || true
+        break
+      fi
+    done
+  fi
+fi
+echo "$$" > "$pgfile"
+export LS_RUN_NAME="$name"
+
+if [ -n "${LS_PRESTART:-}" ]; then
+  "$LS_PRESTART"
+fi
+
+/opt/canonical/landscape/log-system-event "landscape-${name}" start || true
+exec "$@"

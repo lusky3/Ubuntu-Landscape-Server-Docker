@@ -1,0 +1,4 @@
+# Renew ACME (Let's Encrypt) certificates that are due; a no-op when none were issued.
+# acme.sh re-installs the cert/CA files and gracefully reloads Apache on renewal.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+23 3 * * * root /opt/acme.sh/acme.sh --cron --home /opt/acme.sh >> /var/log/landscape/acme-renew.log 2>&1

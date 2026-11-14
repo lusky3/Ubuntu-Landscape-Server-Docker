@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# Entrypoint for the single-container Landscape 26.04 server.
+#
+# Landscape 26.04 dropped its SysV init scripts and is managed only through
+# systemd units, which cannot run in a plain container. Instead, supervisord
+# (see supervisord.conf) runs PostgreSQL, RabbitMQ, Apache, cron and every
+# service from landscape-server.target. This script does first-run
+# provisioning, then hands control to supervisord and waits for it.
 set -euo pipefail
 
 echo "==== Landscape entrypoint starting ===="
@@ -11,11 +18,62 @@ KEY_PATH="/etc/ssl/private/landscape_server.key"
 # any extra certificates in CERT_PATH, so ACME intermediates must be installed here.
 CA_PATH="/etc/ssl/certs/landscape_server_ca.crt"
 ACME_HOME="/opt/acme.sh"
+# Run by acme.sh after every (re-)install of the certificate, including renewals from cron.
+ACME_RELOAD_CMD="pgrep -x apache2 >/dev/null && apache2ctl graceful || true"
 # ACME CA to use; set ACME_SERVER=letsencrypt_test for Let's Encrypt staging.
 ACME_SERVER="${ACME_SERVER:-letsencrypt}"
+DATA_DIR="/var/lib/landscape"
+STATE_DIR="${DATA_DIR}/.state"
+STATE_TAR="${STATE_DIR}/config.tar"
+# Lives in the container layer (not on a volume): present after "docker restart",
+# absent in a brand-new container that reuses the volumes.
+RESTORED_MARKER="/var/lib/.ls-state-restored"
+SUP_CONF="/etc/supervisor/supervisord.conf"
 
 echo "Using FQDN: ${FQDN}"
 
+supctl() { supervisorctl -c "$SUP_CONF" "$@"; }
+
+# --------------------------------------------------------------------- state
+# Configuration that landscape-quickstart writes outside the data volumes
+# (service.conf with its secrets, the Apache vhost, pg_hba.conf, certificates)
+# is archived into the landscape volume so a new container on the same volumes
+# comes back with the same configuration.
+STATE_PATHS=(
+  etc/landscape
+  etc/apache2
+  var/lib/apache2/site
+  etc/postgresql
+  etc/ssl/certs/landscape_server.pem
+  etc/ssl/certs/landscape_server_ca.crt
+  etc/ssl/private/landscape_server.key
+  opt/acme.sh
+)
+
+save_state() {
+  local existing=() p
+  mkdir -p "$STATE_DIR"
+  for p in "${STATE_PATHS[@]}"; do
+    [ -e "/$p" ] && existing+=("$p")
+  done
+  # Keep acme.sh's account, settings and certificates, but not its code: the
+  # image ships the pinned acme.sh, and restoring old code would undo upgrades.
+  tar -C / -cf "${STATE_TAR}.new" \
+    --exclude=opt/acme.sh/acme.sh --exclude=opt/acme.sh/dnsapi \
+    --exclude=opt/acme.sh/deploy --exclude=opt/acme.sh/notify \
+    "${existing[@]}" && mv -f "${STATE_TAR}.new" "$STATE_TAR"
+  chmod 600 "$STATE_TAR"
+}
+
+restore_state() {
+  if [ -f "$STATE_TAR" ] && [ ! -f "$RESTORED_MARKER" ]; then
+    echo "Restoring saved configuration from ${STATE_TAR}..."
+    tar -C / -xpf "$STATE_TAR"
+  fi
+  touch "$RESTORED_MARKER"
+}
+
+# --------------------------------------------------------------- certificates
 generate_self_signed_cert() {
   echo "Generating self-signed certificate..."
   cat > /tmp/san.cnf <<EOF
@@ -51,20 +109,25 @@ acme_cert_exists() {
 # CERT_PATH and the intermediate chain in CA_PATH so clients can build the chain.
 install_acme_cert() {
   "${ACME_HOME}/acme.sh" --home "$ACME_HOME" --install-cert -d "$FQDN" \
-    --key-file "$KEY_PATH" --cert-file "$CERT_PATH" --ca-file "$CA_PATH"
+    --key-file "$KEY_PATH" --cert-file "$CERT_PATH" --ca-file "$CA_PATH" \
+    --reloadcmd "$ACME_RELOAD_CMD"
   chmod 600 "$KEY_PATH"
   chmod 644 "$CERT_PATH" "$CA_PATH"
 }
 
-# Certificate generation
-if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
+CERT_SUPPLIED=false
+ensure_certificate() {
+  if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
+    # Mounted by the user or restored from saved state: never replace it later.
+    CERT_SUPPLIED=true
+    return 0
+  fi
   echo "Generating SSL certificate..."
-  ACME_OK=false
-
+  local acme_ok=false
   if [ -n "${ACME_DNS_PROVIDER:-}" ]; then
     # Strip dns_ prefix if provided
-    PROVIDER="${ACME_DNS_PROVIDER#dns_}"
-    echo "Attempting ACME certificate (${ACME_SERVER}) with DNS authorization (${PROVIDER})..."
+    local provider="${ACME_DNS_PROVIDER#dns_}" var
+    echo "Attempting ACME certificate (${ACME_SERVER}) with DNS authorization (${provider})..."
 
     # acme.sh DNS plugins read provider-native names (CF_Token, AWS_ACCESS_KEY_ID,
     # GD_Key, ...). They are supplied here as ACME_<name>, so strip the prefix.
@@ -74,209 +137,451 @@ if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
     done
 
     # acme.sh exits 2 when a still-valid certificate already exists; that is fine.
-    acme_rc=0
-    "${ACME_HOME}/acme.sh" --home "$ACME_HOME" --issue --dns "dns_${PROVIDER}" \
+    local acme_rc=0
+    "${ACME_HOME}/acme.sh" --home "$ACME_HOME" --issue --dns "dns_${provider}" \
       -d "$FQDN" --server "$ACME_SERVER" 2>&1 || acme_rc=$?
     if { [ "$acme_rc" -eq 0 ] || [ "$acme_rc" -eq 2 ]; } && install_acme_cert; then
       echo "ACME certificate installed"
-      ACME_OK=true
+      acme_ok=true
     else
-      echo "ERROR: ACME issuance failed (invalid provider '${PROVIDER}', missing credentials, or DNS/CA error)"
+      echo "ERROR: ACME issuance failed (invalid provider '${provider}', missing credentials, or DNS/CA error)"
       echo "Falling back to self-signed certificate"
     fi
   fi
-
-  if [ "$ACME_OK" != true ]; then
+  if [ "$acme_ok" != true ]; then
     generate_self_signed_cert
   fi
-fi
+}
 
-# landscape-quickstart names the Apache vhost after the CN of the certificate
-# above (<CN>.conf), so derive the path instead of assuming "localhost".
-CERT_CN=$(openssl x509 -in "$CERT_PATH" -noout -subject -nameopt multiline | sed -n 's/^ *commonName *= *//p')
-VHOST_CONF="/etc/apache2/sites-available/${CERT_CN:-$FQDN}.conf"
+# ------------------------------------------------------------------ services
+wait_for() { # wait_for <description> <tries> <command...>
+  local what="$1" tries="$2"
+  shift 2
+  for _ in $(seq 1 "$tries"); do
+    if "$@" >/dev/null 2>&1; then
+      echo "${what} is ready."
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: timed out waiting for ${what}" >&2
+  return 1
+}
 
-# Initialize PostgreSQL data directory if empty (first run with volume mount)
-PG_VERSION=$(find /usr/lib/postgresql/ -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null | head -1)
-PG_DATA="/var/lib/postgresql/${PG_VERSION}/main"
-if [ ! -d "$PG_DATA" ] || [ -z "$(ls -A "$PG_DATA" 2>/dev/null)" ]; then
-  echo "PostgreSQL data directory empty - initializing cluster..."
-  mkdir -p "$PG_DATA"
-  chown -R postgres:postgres /var/lib/postgresql
-  su postgres -c "/usr/lib/postgresql/${PG_VERSION}/bin/initdb -D $PG_DATA"
-fi
-
-echo "Starting PostgreSQL..."
-service postgresql start
-
-echo "Waiting for PostgreSQL to be ready..."
-for i in $(seq 1 30); do
-  if su postgres -c "pg_isready" >/dev/null 2>&1; then
-    echo "PostgreSQL is ready."
-    break
+# Idempotently (re)create the RabbitMQ vhosts/user that service.conf points to.
+# RabbitMQ state is not persisted, so this runs on every start.
+provision_rabbitmq() {
+  local user password vhost hvhost
+  # Use Landscape's own settings loader: service.conf may store the password
+  # base64-encoded ("b64:...") and the broker needs the decoded value.
+  {
+    read -r user
+    read -r password
+    read -r vhost
+    read -r hvhost
+  } < <(/opt/venvs/landscape/bin/python3 -c '
+from canonical.landscape import settings
+from canonical.lib.text import password_decode
+b = settings.get_settings().broker
+print(b.user)
+print(password_decode(b.password) if b.password else "")
+print(b.vhost)
+print(b.hostagent_virtual_host)
+')
+  if [ -z "$password" ]; then
+    echo "ERROR: no broker password in /etc/landscape/service.conf" >&2
+    return 1
   fi
-  echo "  Waiting... ($i/30)"
-  sleep 2
-done
+  local v
+  for v in "$vhost" "$hvhost"; do
+    rabbitmqctl list_vhosts -q | grep -qx "$v" || rabbitmqctl add_vhost "$v"
+  done
+  if rabbitmqctl list_users -q | cut -f1 | grep -qx "$user"; then
+    rabbitmqctl change_password "$user" "$password"
+  else
+    rabbitmqctl add_user "$user" "$password"
+  fi
+  for v in "$vhost" "$hvhost"; do
+    rabbitmqctl set_permissions -p "$v" "$user" '.*' '.*' '.*'
+  done
+}
 
-echo "Starting RabbitMQ..."
-rabbitmq-server -detached
-sleep 10
+init_postgres_cluster() {
+  local pgv pgdata
+  pgv=$(find /usr/lib/postgresql/ -maxdepth 1 -mindepth 1 -printf '%f\n' | sort -n | tail -1)
+  pgdata="/var/lib/postgresql/${pgv}/main"
+  if [ ! -s "${pgdata}/PG_VERSION" ]; then
+    echo "PostgreSQL data directory empty - initializing cluster..."
+    mkdir -p "$pgdata"
+    chown -R postgres:postgres /var/lib/postgresql
+    chmod 700 "$pgdata"
+    runuser -u postgres -- "/usr/lib/postgresql/${pgv}/bin/initdb" -D "$pgdata"
+  fi
+  chown -R postgres:postgres /var/lib/postgresql
+  mkdir -p /run/postgresql
+  chown postgres:postgres /run/postgresql
+}
 
-# Check if database exists - quickstart flag may persist on volume but DB is lost on rebuild
-DB_EXISTS=false
-if su postgres -c "psql -lqt" 2>/dev/null | cut -d \| -f 1 | grep -qw landscape-standalone-main; then
-  DB_EXISTS=true
-fi
+# The generated vhost only proxies /ping on the plain-HTTP (port 80) vhost, which
+# redirects everything else to HTTPS. Add it to the HTTPS vhost as well so that
+# https://<host>/ping (used by the healthcheck) reaches the ping server.
+fixup_vhost() {
+  local cn vhost_conf
+  cn=$(openssl x509 -in "$CERT_PATH" -noout -subject -nameopt multiline | sed -n 's/^ *commonName *= *//p')
+  vhost_conf="/etc/apache2/sites-available/${cn:-localhost}.conf"
+  if [ ! -f "$vhost_conf" ]; then
+    echo "WARNING: expected Apache vhost ${vhost_conf} not found" >&2
+    return 0
+  fi
+  if ! grep -q 'ls-container: https ping' "$vhost_conf"; then
+    echo "Adding /ping to the HTTPS VirtualHost..."
+    sed -i '/^<VirtualHost \*:443>/,/^<\/VirtualHost>/ {
+      /^ *RewriteEngine On/a\
+    # ls-container: https ping\
+    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]
+    }' "$vhost_conf"
+  fi
 
-if [ ! -f /var/lib/landscape/.quickstart_done ] || [ "$DB_EXISTS" = false ]; then
-  if [ "$DB_EXISTS" = false ] && [ -f /var/lib/landscape/.quickstart_done ]; then
-    echo "Database missing after container rebuild - re-running quickstart..."
-    rm -f /var/lib/landscape/.quickstart_done
+  # The generated rules build the virtual-host URL from %{HTTP_HOST}:443. When the
+  # container's 443 is published on another host port the browser's Host header
+  # already carries a port ("localhost:8443"), giving "localhost:8443:443" and an
+  # HTTP 500. Use the port-less %{SERVER_NAME} plus the public port instead. Runs on
+  # every start (the vhost may come back from the saved state) and is idempotent:
+  # both the original and the rewritten forms are matched.
+  local port="${LANDSCAPE_PUBLIC_PORT:-443}"
+  case "$port" in
+    '' | *[!0-9]*) echo "ERROR: LANDSCAPE_PUBLIC_PORT must be a port number, got '${port}'" >&2; return 1 ;;
+  esac
+  sed -i -E \
+    -e "s#(\+\+vh\+\+https:)(%\{HTTP_HOST\}|%\{SERVER_NAME\}):[0-9]+/#\1%{SERVER_NAME}:${port}/#" \
+    -e "s#https://(%\{HTTP_HOST\}|%\{SERVER_NAME\}):[0-9]+/?%\{REQUEST_URI\}#https://%{SERVER_NAME}:${port}%{REQUEST_URI}#" \
+    "$vhost_conf"
+}
+
+# The roles in a 24.04 database keep passwords that only the lost service.conf
+# knew. Give them new ones and record those in the freshly generated service.conf.
+reset_legacy_db_passwords() {
+  /opt/venvs/landscape/bin/python3 - <<'PY'
+import subprocess
+from configparser import RawConfigParser
+
+from canonical.lib.text import generate_password, password_encode
+
+CONF = "/etc/landscape/service.conf"
+conf = RawConfigParser()
+conf.read(CONF)
+for section, user_key, pw_key, default in (
+    ("stores", "user", "password", "landscape"),
+    ("schema", "store_user", "store_password", "landscape_superuser"),
+):
+    if not conf.has_section(section):
+        conf.add_section(section)
+    role = conf.get(section, user_key, fallback=default)
+    password = generate_password(16)
+    subprocess.run(
+        ["runuser", "-u", "postgres", "--", "psql", "-q", "-v", "ON_ERROR_STOP=1", "-c",
+         f"ALTER ROLE \"{role}\" PASSWORD '{password}'"],
+        check=True,
+    )
+    conf.set(section, pw_key, password_encode(password))
+with open(CONF, "w") as f:
+    conf.write(f)
+PY
+}
+
+# 24.04 images created the admin as admin@landscape.local, which the 26.04 login
+# rejects as an invalid address. Move that default account to ADMIN_EMAIL
+# (default admin@landscape.example); the password is unchanged.
+rename_legacy_admin() {
+  local old="admin@landscape.local" new="${ADMIN_EMAIL:-admin@landscape.example}"
+  [ "$new" != "$old" ] || return 0
+  if runuser -u postgres -- psql -d landscape-standalone-main -qAt -v ON_ERROR_STOP=1 \
+    -v old="$old" -v new="$new" <<'SQL'
+UPDATE person SET email = :'new'
+ WHERE email = :'old' AND NOT EXISTS (SELECT 1 FROM person WHERE email = :'new');
+SQL
+  then
+    sed -i "s/^email: ${old}\$/email: ${new}/" "${DATA_DIR}/admin-credentials.txt" 2>/dev/null || true
+    echo "Legacy admin login is now ${new}."
+  else
+    echo "WARNING: could not rename the legacy admin account." >&2
+  fi
+}
+
+run_first_time_setup() {
+  local db_exists=false
+  if runuser -u postgres -- psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw landscape-standalone-main; then
+    db_exists=true
+  fi
+
+  # Volumes written by the 24.04 image carry the database and .quickstart_done
+  # but no saved configuration archive: its service.conf (with the database
+  # passwords), Apache vhost and RabbitMQ settings lived only in the old
+  # container. Re-run quickstart to regenerate them, but keep the old accounts.
+  local legacy=false
+  if [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$db_exists" = true ] && [ ! -f "$STATE_TAR" ]; then
+    legacy=true
+    echo "Existing data from an older image found without saved configuration - upgrading in place."
+  elif [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$db_exists" = true ] && [ -s /etc/landscape/service.conf ]; then
+    echo "Skipping landscape-quickstart (already done)."
+    return 0
+  fi
+  if [ -f "${DATA_DIR}/.quickstart_done" ] && [ "$legacy" = false ]; then
+    echo "Database or configuration missing - re-running quickstart..."
+    rm -f "${DATA_DIR}/.quickstart_done"
+  fi
+
+  if [ "$legacy" = true ]; then
+    reset_legacy_db_passwords
   fi
   echo "Running landscape-quickstart..."
   if ! landscape-quickstart --skip-ssl; then
     echo "ERROR: landscape-quickstart failed. Aborting startup." >&2
-    exit 1
+    return 1
   fi
-  
-  # Fix Apache vhost rewrite - landscape-quickstart generates broken config
-  sed -i 's|++vh++https:%{HTTP_HOST}:443/|++vh++https:%{SERVER_NAME}:443/|g' "$VHOST_CONF"
-  sed -i 's|https://%{HTTP_HOST}:443/|https://%{HTTP_HOST}/|g' "$VHOST_CONF"
-  
-  # Fix 1: Add /ping rewrite to HTTPS VirtualHost
-  echo "Adding /ping endpoint to HTTPS VirtualHost..."
-  sed -i '/^    RewriteEngine On$/a\    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]' "$VHOST_CONF"
-  
-  # Add /ping rewrite to HTTPS VirtualHost (after RewriteEngine On in the 443 vhost)
-  echo "Adding /ping endpoint to HTTPS VirtualHost..."
-  sed -i '/^<VirtualHost \*:443>/,/^<\/VirtualHost>/ {
-    /RewriteEngine On/a\
-\
-    # Landscape Ping Server on port 8070\
-    RewriteRule ^/ping$ http://localhost:8070/ping [P,L]
-  }' "$VHOST_CONF"
-  
+  provision_rabbitmq
+
   # Make sure the intended certificate is in place BEFORE starting services:
   # the ACME-issued one if we have it, otherwise a self-signed one with SANs.
   if acme_cert_exists; then
     echo "Re-installing ACME certificate..."
     install_acme_cert
+  elif [ "$CERT_SUPPLIED" = true ]; then
+    # e.g. the old certificate mounted for a 24.04 upgrade, so pinned clients keep working.
+    echo "Keeping the existing certificate."
   else
     echo "Regenerating SSL certificate with SAN..."
     generate_self_signed_cert
   fi
 
-  # Create default admin account
+  if [ "$legacy" = true ]; then
+    rename_legacy_admin
+    touch "${DATA_DIR}/.quickstart_done"
+    return 0
+  fi
+
   echo "Creating default admin account..."
-  ADMIN_EMAIL="${ADMIN_EMAIL:-admin@landscape.local}"
+  local admin_email="${ADMIN_EMAIL:-admin@landscape.example}" admin_password
   if [ -n "${ADMIN_PASSWORD:-}" ]; then
     echo "Using admin password from ADMIN_PASSWORD environment variable."
+    admin_password="$ADMIN_PASSWORD"
   else
-    ADMIN_PASSWORD=$(openssl rand -base64 24)
-    echo "Generated a random admin password (see /var/lib/landscape/admin-credentials.txt)."
+    admin_password=$(openssl rand -base64 24)
+    echo "Generated a random admin password (see ${DATA_DIR}/admin-credentials.txt)."
   fi
   if ! /opt/canonical/landscape/bootstrap-account \
-    --admin_email "$ADMIN_EMAIL" \
-    --admin_password "$ADMIN_PASSWORD" \
+    --admin_email "$admin_email" \
+    --admin_password "$admin_password" \
     --admin_name "Admin User" \
-    --root_url https://localhost; then
+    --root_url "https://${FQDN}"; then
     echo "ERROR: bootstrap-account failed to create the admin user. Aborting startup." >&2
+    return 1
+  fi
+  cat > "${DATA_DIR}/admin-credentials.txt" <<CREDSEOF
+email: $admin_email
+password: $admin_password
+CREDSEOF
+  chmod 600 "${DATA_DIR}/admin-credentials.txt"
+  echo "Admin credentials written to ${DATA_DIR}/admin-credentials.txt (root-only)."
+
+  echo "Generating registration key..."
+  openssl rand -hex 16 > "${DATA_DIR}/registration-key.txt"
+  chmod 640 "${DATA_DIR}/registration-key.txt"
+
+  touch "${DATA_DIR}/.quickstart_done"
+}
+
+# Set keys in the [features] section of service.conf (edited in place so the
+# file's owner and mode are kept). Usage: set_features key=value...
+# An empty value removes the key.
+set_features() {
+  python3 -I - /etc/landscape/service.conf "$@" <<'PY'
+import sys
+
+conf, *pairs = sys.argv[1:]
+with open(conf, "r+") as f:
+    lines = f.read().split("\n")
+    if "[features]" not in lines:
+        lines += ["", "[features]", ""]
+    for pair in pairs:
+        key, value = pair.split("=", 1)
+        start = lines.index("[features]") + 1
+        end = start
+        while end < len(lines) and not lines[end].startswith("["):
+            end += 1
+        for i in range(start, end):
+            if lines[i].split("=")[0].strip() == key:
+                if value:
+                    lines[i] = f"{key} = {value}"
+                else:
+                    del lines[i]
+                break
+        else:
+            if value:
+                lines.insert(start, f"{key} = {value}")
+    f.seek(0)
+    f.write("\n".join(lines))
+    f.truncate()
+PY
+}
+
+# Outbox (needs the landscape-outbox service), computer soft deletion (which
+# relies on the outbox), repository mirrors and Ubuntu Pro licensing all default to on; set the
+# matching variable to "false" to disable. Pro licensing is what lets computers
+# be accepted without a seat-based license file (legacy seats still take
+# precedence when /etc/landscape/license.txt is present).
+configure_features() {
+  local outbox="${LANDSCAPE_ENABLE_OUTBOX:-true}" soft="${LANDSCAPE_ENABLE_SOFT_DELETION:-true}"
+  local pro="${LANDSCAPE_ENABLE_PRO_LICENSING:-true}" mirrors=""
+  # Repository mirrors (served by the landscape-debarchive service). This is a
+  # real feature flag (config_key "repository_mirrors" in features/flag.py), but
+  # the service.conf validator does not list it and logs a harmless "invalid and
+  # ignored" warning. Any value enables it, so only write it when on.
+  if [ "${LANDSCAPE_ENABLE_REPOSITORY_MIRRORS:-true}" = "true" ]; then mirrors="true"; fi
+  set_features "outbox=${outbox}" "computer_soft_deletion=${soft}" "ubuntu_pro_licensing=${pro}" \
+    "repository_mirrors=${mirrors}"
+}
+
+# The outbox talks to the task handler over mutual TLS. The snaps share the
+# client certificates through a content interface; here the task handler's
+# self-generated client certs are linked into the outbox's certificate directory.
+prepare_task_handler_certs() {
+  runuser -u landscape -- /usr/local/bin/ls-task-handler certs
+  ln -sfn "${DATA_DIR}/task-handler/certs/active/client" "${DATA_DIR}/outbox/grpc-certs"
+  chown -h landscape:landscape "${DATA_DIR}/outbox/grpc-certs"
+}
+
+# Hash-id databases for package reporting; slow and network-dependent, so run
+# in the background once services are up.
+generate_hash_ids() {
+  if [ -f "${DATA_DIR}/.hash_id_done" ]; then
+    echo "Hash-id databases already generated."
+    return 0
+  fi
+  if [ "${SKIP_HASH_ID_GENERATION:-false}" = "true" ]; then
+    # No marker: setting the variable back to false later should still generate them.
+    echo "Skipping hash-id database generation (SKIP_HASH_ID_GENERATION=true)"
+    return 0
+  fi
+  echo "Generating hash-id databases in background (this may take a few minutes)..."
+  mkdir -p "${DATA_DIR}/hash-id-databases"
+  chown landscape:landscape "${DATA_DIR}/hash-id-databases"
+  (
+    # A throwaway GNUPGHOME: root has no ~/.gnupg here, which stops dirmngr.
+    GNUPGHOME=$(mktemp -d)
+    export GNUPGHOME
+    gpg --no-default-keyring --keyring /etc/apt/trusted.gpg.d/ubuntu-archive-runtime.gpg \
+      --keyserver keyserver.ubuntu.com --recv-keys \
+      40976EAF437D05B5 3B4FE6ACC0B21F32 871920D1991BC93C \
+      || echo "WARNING: failed to import Ubuntu archive GPG keys." >&2
+    chmod 644 /etc/apt/trusted.gpg.d/ubuntu-archive-runtime.gpg 2>/dev/null || true
+    gpgconf --kill dirmngr 2>/dev/null || true
+    rm -rf "$GNUPGHOME"
+    # Run the script itself: its shebang selects the Landscape virtualenv, which
+    # has the modules it imports (the system python3 does not).
+    # The hash-id stores only map packages that are in the package database.
+    # The stock package data (landscape-hashids) is not installed in this image,
+    # so seed the empty database from the archives; the script refuses to
+    # --populate a database that already has packages, so only do it when empty.
+    populate=()
+    if [ -z "$(runuser -u postgres -- psql -d landscape-standalone-package -Atc 'SELECT 1 FROM package LIMIT 1' 2>/dev/null)" ]; then
+      populate=(--populate true)
+    fi
+    if runuser -u landscape -- /opt/canonical/landscape/hash-id-databases "${populate[@]}" \
+      --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf; then
+      touch "${DATA_DIR}/.hash_id_done"
+      echo "Hash-id database generation completed successfully."
+    else
+      echo "WARNING: hash-id database generation failed; the weekly cron job will retry." >&2
+    fi
+  ) &
+}
+
+# Release-upgrade targets come from Ubuntu's meta-release data, which the
+# packaged cron only fetches daily at 02:30. Without it a new server answers
+# "no_meta_release" until the next night, so fetch it in the background on start.
+refresh_meta_releases() {
+  (
+    if runuser -u landscape -- /opt/canonical/landscape/scripts/meta_releases.sh >/dev/null 2>&1; then
+      echo "Meta-release data refreshed."
+    else
+      echo "WARNING: meta-release refresh failed; the daily cron job will retry." >&2
+    fi
+  ) &
+}
+
+SUP_PID=""
+STOPPING=0
+forward_signal() {
+  STOPPING=1
+  if [ -n "$SUP_PID" ]; then
+    kill -TERM "$SUP_PID" 2>/dev/null || true
+  fi
+}
+
+main() {
+  rm -f /run/ls-fatal
+  restore_state
+  mkdir -p /run/landscape /run/supervisor /var/log/supervisor "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
+  chown landscape:landscape /run/landscape "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
+  # Process-group ids saved by ls-run belong to the previous supervisord; after a
+  # container restart they may now belong to unrelated processes, so drop them.
+  rm -f /run/landscape/ls-*.pgid
+  ensure_certificate
+  init_postgres_cluster
+
+  echo "Starting supervisord (PostgreSQL + RabbitMQ)..."
+  supervisord -c "$SUP_CONF" &
+  SUP_PID=$!
+  trap forward_signal TERM INT
+
+  wait_for "PostgreSQL" 60 pg_isready -h 127.0.0.1
+  # rabbitmqctl as root needs the broker's Erlang cookie.
+  for _ in $(seq 1 60); do
+    [ -s /var/lib/rabbitmq/.erlang.cookie ] && break
+    sleep 1
+  done
+  install -m 400 /var/lib/rabbitmq/.erlang.cookie /root/.erlang.cookie
+  wait_for "RabbitMQ" 60 rabbitmqctl await_startup
+
+  run_first_time_setup
+  provision_rabbitmq
+  fixup_vhost
+  configure_features
+
+  echo "Running database schema migration..."
+  if setup-landscape-server 2>&1; then
+    echo "Schema migration completed successfully."
+  else
+    echo "ERROR: Schema migration failed. Aborting startup." >&2
+    forward_signal
+    wait "$SUP_PID" || true
     exit 1
   fi
-  cat > /var/lib/landscape/admin-credentials.txt <<CREDSEOF
-email: $ADMIN_EMAIL
-password: $ADMIN_PASSWORD
-CREDSEOF
-  chmod 600 /var/lib/landscape/admin-credentials.txt
-  unset ADMIN_PASSWORD
-  echo "Admin credentials written to /var/lib/landscape/admin-credentials.txt (root-only)."
+  prepare_task_handler_certs
+  save_state
 
-  # Generate registration key for pre-enrollment
-  echo "Generating registration key..."
-  REGISTRATION_KEY=$(openssl rand -hex 16)
-  echo "$REGISTRATION_KEY" > /var/lib/landscape/registration-key.txt
-  chmod 640 /var/lib/landscape/registration-key.txt
-  echo "Registration key saved to /var/lib/landscape/registration-key.txt"
+  echo "Starting Landscape services..."
+  supctl start 'ls:*'
+  refresh_meta_releases
+  generate_hash_ids
 
-  touch /var/lib/landscape/.quickstart_done
-else
-  echo "Skipping landscape-quickstart (already done)."
-fi
-
-# Start rsyslog for package-search service
-echo "Starting rsyslog..."
-rsyslogd || true
-sleep 2
-
-# Import Ubuntu archive GPG keys so hash-id generation can verify package indices
-echo "Importing Ubuntu archive GPG keys..."
-if ! gpg --no-default-keyring --keyring /etc/apt/trusted.gpg.d/ubuntu-archive-runtime.gpg \
-    --keyserver keyserver.ubuntu.com --recv-keys \
-    40976EAF437D05B5 3B4FE6ACC0B21F32 871920D1991BC93C; then
-  echo "WARNING: failed to import Ubuntu archive GPG keys; hash-id generation may fail to verify package indices." >&2
-fi
-
-# Generate hash-id databases for package reporting (run in background to avoid blocking startup)
-if [ ! -f /var/lib/landscape/.hash_id_done ]; then
-  if [ "${SKIP_HASH_ID_GENERATION:-false}" = "true" ]; then
-    echo "Skipping hash-id database generation (SKIP_HASH_ID_GENERATION=true)"
-    touch /var/lib/landscape/.hash_id_done
-  else
-    echo "Generating hash-id databases in background (this may take a few minutes)..."
-    mkdir -p /var/lib/landscape/hash-id-databases
-    (
-      python3 /opt/canonical/landscape/hash-id-databases \
-        --config /opt/canonical/landscape/configs/standalone/hash-id-databases.conf && \
-      touch /var/lib/landscape/.hash_id_done && \
-      echo "Hash-id database generation completed successfully."
-    ) &
-    HASH_ID_PID=$!
-    echo "Hash-id generation running in background (PID: $HASH_ID_PID)"
+  # Block until supervisord exits (SIGTERM from docker stop, or the FATAL listener).
+  local rc=0
+  while kill -0 "$SUP_PID" 2>/dev/null; do
+    wait "$SUP_PID" || rc=$?
+  done
+  echo "supervisord exited (rc=${rc}); saving configuration state."
+  save_state || true
+  if [ "$STOPPING" = 1 ]; then
+    rc=0
   fi
-else
-  echo "Hash-id databases already generated."
-fi
+  if [ -f /run/ls-fatal ]; then
+    echo "ERROR: a service failed permanently: $(cat /run/ls-fatal)" >&2
+    rm -f /run/ls-fatal
+    rc=1
+  fi
+  exit "$rc"
+}
 
-echo "Running database schema migration..."
-if setup-landscape-server 2>&1; then
-  echo "Schema migration completed successfully."
-else
-  echo "ERROR: Schema migration failed. Aborting startup." >&2
-  exit 1
-fi
-
-echo "Starting Landscape services..."
-# lsctl always exits non-zero in this container because landscape-package-search,
-# landscape-hostagent-messenger, landscape-hostagent-consumer and
-# landscape-secrets-service have no init.d script here (systemd-only units not
-# applicable to this standalone image) - that's expected, so its exit code alone
-# can't signal a real failure. Check the filtered output for actual failures instead.
-LSCTL_OUTPUT=$(lsctl start 2>&1 | grep -v "unrecognized service" || true)
-echo "$LSCTL_OUTPUT"
-if echo "$LSCTL_OUTPUT" | grep -q "fail!"; then
-  echo "ERROR: one or more Landscape services failed to start." >&2
-  exit 1
-fi
-
-# Start package-search service (no init.d script, only systemd unit)
-echo "Starting landscape-package-search..."
-/opt/canonical/landscape/go/bin/packagesearch \
-  -config /etc/landscape/service.conf &
-
-# Fix CSP to allow localhost access
-echo "Configuring CSP for localhost access..."
-cat >> "$VHOST_CONF" <<'CSPEOF'
-
-<IfModule mod_headers.c>
-  Header always set Content-Security-Policy "default-src 'self' https://localhost:* localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://localhost:* localhost:* assets.ubuntu.com www.googletagmanager.com www.google-analytics.com script.crazyegg.com www.google.com www.google.ca https://*.maze.co/; style-src 'self' 'unsafe-inline' https://localhost:* localhost:* assets.ubuntu.com https://*.maze.co/; img-src 'self' https://localhost:* localhost:* assets.ubuntu.com data: www.googletagmanager.com www.google-analytics.com script.crazyegg.com www.google.com www.google.ca https://*.maze.co/; connect-src 'self' https://localhost:* localhost:* https://*.maze.co/"
-</IfModule>
-CSPEOF
-
-if pgrep -x apache2 >/dev/null 2>&1; then
-  echo "Stopping background Apache..."
-  apachectl -k stop || true
-fi
-
-echo "Starting Apache in foreground..."
-exec apachectl -D FOREGROUND
+main "$@"

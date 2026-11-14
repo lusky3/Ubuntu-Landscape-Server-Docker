@@ -9,6 +9,9 @@ name: Build and Publish Server
     paths:
       - 'Dockerfile'
       - 'entrypoint.sh'
+      - 'scripts/**'
+      - 'supervisord.conf'
+      - '*.cron'
       - '.landscape-version'
       - '.github/workflows/build.yml'
     tags: ['v*']
@@ -90,6 +93,11 @@ jobs:
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
+      # /opt/snaps holds Canonical's prebuilt Landscape snaps (outbox,
+      # task-handler, debarchive), unpacked as shipped. Their bundled Go
+      # dependencies are Canonical's to fix, so they don't block publishing; the
+      # Security-tab scan below still reports them. Pick up fixes by bumping the
+      # pinned snap revisions in the Dockerfile.
       - name: Run Trivy vulnerability gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
@@ -98,6 +106,7 @@ jobs:
           exit-code: '1'
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          skip-dirs: /opt/snaps
 
       - name: Push server image
         if: github.event_name != 'pull_request'

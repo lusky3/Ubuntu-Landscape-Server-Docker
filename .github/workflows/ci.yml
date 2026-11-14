@@ -44,8 +44,9 @@ jobs:
 
       - name: Check services
         run: |
-          # Check appserver process is running
-          docker exec landscape-server pgrep -f landscape-appserver || exit 1
+          # Every supervised service must be running, not just Apache
+          docker exec landscape-server supervisorctl status ls:landscape-appserver | grep -q RUNNING || exit 1
+          docker exec landscape-server /usr/local/bin/ls-healthcheck || exit 1
 
       - name: Export logs
         if: failure()

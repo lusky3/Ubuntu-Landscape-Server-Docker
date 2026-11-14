@@ -56,7 +56,12 @@ save_state() {
   for p in "${STATE_PATHS[@]}"; do
     [ -e "/$p" ] && existing+=("$p")
   done
-  tar -C / -cf "${STATE_TAR}.new" "${existing[@]}" && mv -f "${STATE_TAR}.new" "$STATE_TAR"
+  # Keep acme.sh's account, settings and certificates, but not its code: the
+  # image ships the pinned acme.sh, and restoring old code would undo upgrades.
+  tar -C / -cf "${STATE_TAR}.new" \
+    --exclude=opt/acme.sh/acme.sh --exclude=opt/acme.sh/dnsapi \
+    --exclude=opt/acme.sh/deploy --exclude=opt/acme.sh/notify \
+    "${existing[@]}" && mv -f "${STATE_TAR}.new" "$STATE_TAR"
   chmod 600 "$STATE_TAR"
 }
 
@@ -110,8 +115,11 @@ install_acme_cert() {
   chmod 644 "$CERT_PATH" "$CA_PATH"
 }
 
+CERT_SUPPLIED=false
 ensure_certificate() {
   if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
+    # Mounted by the user or restored from saved state: never replace it later.
+    CERT_SUPPLIED=true
     return 0
   fi
   echo "Generating SSL certificate..."
@@ -338,6 +346,9 @@ run_first_time_setup() {
   if acme_cert_exists; then
     echo "Re-installing ACME certificate..."
     install_acme_cert
+  elif [ "$CERT_SUPPLIED" = true ]; then
+    # e.g. the old certificate mounted for a 24.04 upgrade, so pinned clients keep working.
+    echo "Keeping the existing certificate."
   else
     echo "Regenerating SSL certificate with SAN..."
     generate_self_signed_cert
@@ -513,6 +524,9 @@ main() {
   restore_state
   mkdir -p /run/landscape /run/supervisor /var/log/supervisor "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
   chown landscape:landscape /run/landscape "$DATA_DIR/debarchive" "$DATA_DIR/outbox" "$DATA_DIR/task-handler"
+  # Process-group ids saved by ls-run belong to the previous supervisord; after a
+  # container restart they may now belong to unrelated processes, so drop them.
+  rm -f /run/landscape/ls-*.pgid
   ensure_certificate
   init_postgres_cluster
 

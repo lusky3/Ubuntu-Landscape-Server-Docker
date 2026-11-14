@@ -9,6 +9,9 @@ name: Build and Publish Server
     paths:
       - 'Dockerfile'
       - 'entrypoint.sh'
+      - 'scripts/**'
+      - 'supervisord.conf'
+      - '*.cron'
       - '.landscape-version'
       - '.github/workflows/build.yml'
     tags: ['v*']

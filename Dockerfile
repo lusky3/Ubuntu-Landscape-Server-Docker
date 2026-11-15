@@ -2,7 +2,7 @@
 # Stage 1: fetch the two companion snaps from the Snap Store and unpack them with
 # unsquashfs. Their binaries are plain Go executables; no snapd is needed to run
 # them (see scripts/snapctl for the snapctl shim they call to read configuration).
-FROM ubuntu:24.04 AS snaps
+FROM ubuntu:24.04
 ARG TARGETARCH
 ARG OUTBOX_AMD64="6JUNBMTKNtHvRrElRDJFPphgyjYNcobj_36.snap fab1031c823a3aa9d2b91d046f7d19ab0eb42182603eeeb8dd09e58763075be9e3c6dd95b382167091a8ba1b99959189"
 ARG OUTBOX_ARM64="6JUNBMTKNtHvRrElRDJFPphgyjYNcobj_35.snap d94f58ff1cb739e8b7b188f1c473df4b4fdbfe68689a607bdc7ad0429de9992d1cc7cc8d3f19a214d6117b6cf544438c"
